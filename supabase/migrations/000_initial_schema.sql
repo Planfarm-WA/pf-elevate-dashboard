@@ -381,6 +381,10 @@ create policy "Business access via round" on public.tasks_30
 
 -- -----------------------------------------------------------------------------
 -- Table privileges: signed-in users only (RLS above decides which rows)
+--
+-- Supabase's default privileges give anon and authenticated ALL on new tables,
+-- including TRUNCATE, which RLS does not cover. Start both from nothing, then
+-- grant authenticated exactly what the app needs.
 -- -----------------------------------------------------------------------------
 revoke all on
   public.businesses, public.staff, public.clients,
@@ -388,7 +392,7 @@ revoke all on
   public.periods_120, public.priorities_120, public.pending_priorities_120,
   public.rounds_30, public.tasks_30, public.pending_tasks_30,
   public.coaching_sessions
-from anon;
+from anon, authenticated;
 
 grant select on public.staff to authenticated;
 grant select, insert, update, delete on

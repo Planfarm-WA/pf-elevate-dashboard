@@ -53,7 +53,7 @@ Supabase CLI migrations. `000_initial_schema.sql` creates everything, wrapped in
   - Free-text dates (`by_when`, `period`, `session_date`) stay `text`, because the app accepts "TBC".
   - A partial unique index on `is_current` allows one current period/round per business.
 - **Access (RLS).** `staff` rows can access every business. `clients` rows can access their own business(es). `anon` gets nothing. The checks are the `security definer` helpers `is_staff()` and `can_access_business(business_id)`. `priorities_120` and `tasks_30` have no `business_id` and resolve it through their parent period/round.
-- **Adding a table:** enable RLS, add a `can_access_business` policy, grant to `authenticated`, revoke from `anon`, and add the `set_updated_at` trigger if the table has `updated_at`.
+- **Adding a table:** enable RLS, add a `can_access_business` policy, add it to the `revoke all ... from anon, authenticated` list (Supabase's defaults grant both roles everything, including `TRUNCATE`, which bypasses RLS) and to the `grant select, insert, update, delete ... to authenticated` list, and add the `set_updated_at` trigger if the table has `updated_at`.
 
 To check schema changes without a Supabase project, run the script against a throwaway local Postgres. First create a stub of what Supabase provides:
 
