@@ -4,7 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-The Planfarm Elevate coaching dashboard: a single static page, `index.html`, holding the CSS (`<style>`), the markup and all the JavaScript (one `<script>` at the end). It is a blank per-client template: the header `<h1>Client Name</h1>` and the "Who" suggestions (`<datalist id="who-suggestions">`) are placeholders edited for each client.
+The Planfarm Elevate coaching dashboard: a static page in three files:
+- `index.html` has the markup.
+- `css/styles.css` has all the styles. Many elements also carry inline `style="..."` attributes, in the markup and in JS template strings.
+- `js/app.js` has all the JavaScript. It's loaded with a plain `<script src>` near the end of `<body>` and runs immediately.
+
+It is a blank per-client template: the header `<h1>Client Name</h1>` and the "Who" suggestions (`<datalist id="who-suggestions">`) in `index.html` are placeholders edited for each client.
+
+**`js/app.js` is a classic script, not an ES module.** The inline `onclick`/`onchange`/... handlers, in `index.html` and in template strings in `app.js`, call its top-level functions by name, so those must stay global. Don't add `type="module"`, and don't wrap the file in a function, until the handlers are replaced with `addEventListener`. A classic script also keeps opening `index.html` straight from disk (`file://`) working.
 
 The page has no build step, linter or test suite. To run it, open `index.html` in a browser, or serve the folder (`python3 -m http.server`) and open it there. The only external resource is Google Fonts (DM Sans, Fraunces).
 
@@ -88,6 +95,7 @@ Roughly in order. The schema has been reviewed but not yet run on the real Supab
    - Replace the whole-state `save()` with row-level inserts, updates and deletes.
    - Quote the IDs in every inline `onclick="fn(${id})"`, because UUIDs aren't numbers.
    - Keep Export/Import working as a backup.
+   - Consider moving `js/app.js` to ES modules at the same time, maybe with Vite. That means replacing the inline handlers with `addEventListener`, which this step rewrites anyway. Login also means serving over HTTP, so losing `file://` no longer matters.
 4. **Escape user text** before it goes into `innerHTML` and `value="..."` attributes.
 5. **Session Notes card** (`addNote()`): either save the notes (which needs a table) or remove the card.
 6. **`periods120[].oneyear`:** either show it on the period panel or stop collecting it.

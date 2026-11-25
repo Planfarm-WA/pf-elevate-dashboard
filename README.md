@@ -14,7 +14,7 @@ Priorities and tasks have a status (On Track / Off Track / Complete), an owner a
 
 ## Using it
 
-Open `index.html` in a web browser. Nothing needs installing. An internet connection is only needed for the fonts.
+Open `index.html` in a web browser. Nothing needs installing. An internet connection is only needed for the fonts. Keep `index.html` together with its `css/` and `js/` folders, because the page loads its styles and code from them.
 
 **Saving.** Changes save automatically in the browser you're using. They are not shared with anyone else, and don't move to another computer or browser by themselves. Clearing the browser's site data deletes them.
 
@@ -30,11 +30,11 @@ Open `index.html` in a web browser. Nothing needs installing. An internet connec
 
 ### Setting up for a new client
 
-1. Make a copy of `index.html`.
-2. Replace `Client Name` in the header with the client's name.
-3. Replace the placeholder names in the "Who" suggestions (`Person A`, `Person B`, …) near the end of the file.
+1. Make a copy of `index.html` together with the `css/` and `js/` folders.
+2. In `index.html`, replace `Client Name` in the header with the client's name.
+3. In `index.html`, replace the placeholder names in the "Who" suggestions (`Person A`, `Person B`, …) near the end of the file.
 
-The browser stores data under a fixed name (`pf_elevate_blank1`). Copies served from the same website address share that storage, so give each client's copy a different name before hosting several together.
+The browser stores data under a fixed name (`pf_elevate_blank1`, set in `js/app.js`). Copies served from the same website address share that storage, so give each client's copy a different storage name before hosting several together.
 
 ## Supabase database (in progress)
 
@@ -92,7 +92,9 @@ Dates such as "By When" are stored as text, because the dashboard accepts entrie
 ## Repository layout
 
 ```
-index.html            The dashboard: page, styles and code in one file
+index.html            The dashboard page (markup)
+css/styles.css        Styles for the page
+js/app.js             The dashboard's code (state, rendering, saving, import/export)
 supabase/migrations/  Database tables and access rules for Supabase (CLI migrations)
 CLAUDE.md             Notes for Claude Code when working on this repository
 ```
