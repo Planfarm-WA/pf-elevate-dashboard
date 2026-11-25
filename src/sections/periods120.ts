@@ -1,9 +1,10 @@
 // The 120-Day Priorities tab: one tab per period, its priorities, statuses, "Push →", renaming,
 // and the New Period dialog (#modal-120-overlay). The last period is the active one.
 
-import { num, oneOf, type Actions } from '../actions.ts';
+import { num, oneOf, str, type Actions } from '../actions.ts';
 import { byId } from '../dom.ts';
 import { initDragTable } from '../drag.ts';
+import { newId } from '../ids.ts';
 import { openEditModal } from '../edit-modal.ts';
 import { state } from '../state.ts';
 import { updateStats } from '../stats.ts';
@@ -40,7 +41,7 @@ export function render120Periods(): void {
   updateStats();
 }
 
-export function renderPeriodPriorities(periodId: number): void {
+export function renderPeriodPriorities(periodId: string): void {
   const period = state.periods120.find((p) => p.id === periodId);
   if (!period) return;
   const tbody = document.getElementById(`body-120-${periodId}`);
@@ -53,7 +54,7 @@ export function renderPeriodPriorities(periodId: number): void {
     const pushBtn = canPush ? `<button class="push-btn" data-click="pushPriority120" data-period-id="${periodId}" data-item-id="${p.id}">Push →</button>` : p.pushed ? `<span class="push-btn pushed">Pushed ✓</span>` : '';
     const tr = document.createElement('tr');
     tr.className = p.status === 'complete' ? 'status-complete' : p.status === 'off-track' ? 'status-off-track' : '';
-    tr.setAttribute('draggable', 'true'); tr.setAttribute('data-id', String(p.id));
+    tr.setAttribute('draggable', 'true'); tr.setAttribute('data-id', p.id);
     tr.innerHTML = `<td style="width:20px;cursor:grab;color:var(--grey-light);font-size:16px;text-align:center" class="drag-handle">⠿</td><td><div class="status-btns"><button class="status-btn ${p.status === 'on-track' ? 'active-on-track' : ''}" data-click="setStatus120" data-period-id="${periodId}" data-item-id="${p.id}" data-status="on-track">✓ On Track</button><button class="status-btn ${p.status === 'off-track' ? 'active-off-track' : ''}" data-click="setStatus120" data-period-id="${periodId}" data-item-id="${p.id}" data-status="off-track">✗ Off Track</button><button class="status-btn ${p.status === 'complete' ? 'active-complete' : ''}" data-click="setStatus120" data-period-id="${periodId}" data-item-id="${p.id}" data-status="complete">★ Complete</button></div></td><td class="${p.status === 'complete' ? 'task-text' : ''}">${p.what}${p.pushed ? '<span class="pushed-label">Pushed →</span>' : ''}</td><td>${badgeFor(p.who)}</td><td style="font-size:12px;color:var(--grey-light);white-space:nowrap">${p.when}</td><td style="display:flex;gap:4px;align-items:center;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" data-click="editItem120" data-period-id="${periodId}" data-item-id="${p.id}">✏️</button><button class="btn btn-danger btn-sm" data-click="deletePriority120" data-period-id="${periodId}" data-item-id="${p.id}">🗑</button>${pushBtn}</td>`;
     tbody.appendChild(tr);
   });
@@ -65,7 +66,7 @@ export function renderPeriodPriorities(periodId: number): void {
   initDragTable(`body-120-${periodId}`, 'priorities120', periodId);
 }
 
-function switch120Period(id: number): void {
+function switch120Period(id: string): void {
   document.querySelectorAll('#period-tabs-120 .round-tab').forEach((t) => t.classList.remove('active'));
   document.querySelectorAll('#period-panels-120 .round-panel').forEach((p) => p.classList.remove('active'));
   document.getElementById(`ptab-${id}`)?.classList.add('active');
@@ -73,7 +74,7 @@ function switch120Period(id: number): void {
 }
 
 /** A status button. Clicking the active status sets it back to 'none'. */
-function setStatus120(periodId: number, itemId: number, status: Status): void {
+function setStatus120(periodId: string, itemId: string, status: Status): void {
   const period = state.periods120.find((p) => p.id === periodId); if (!period) return;
   const p = period.priorities.find((x) => x.id === itemId); if (!p) return;
   const wasComplete = p.status !== 'complete';
@@ -83,15 +84,14 @@ function setStatus120(periodId: number, itemId: number, status: Status): void {
 }
 
 /** "Push →": copy the priority into the next period, or queue it until one is created. */
-function pushPriority120(periodId: number, itemId: number): void {
+function pushPriority120(periodId: string, itemId: string): void {
   const period = state.periods120.find((p) => p.id === periodId); if (!period) return;
   const item = period.priorities.find((x) => x.id === itemId); if (!item) return;
   item.pushed = true;
   const idx = state.periods120.findIndex((p) => p.id === periodId);
   const next = state.periods120[idx + 1];
   if (next) {
-    const newId = Math.max(...next.priorities.map((x) => x.id), 0) + 1;
-    next.priorities.push({ id: newId, what: item.what, who: item.who, when: item.when, status: 'none', pushed: false, carriedFrom: period.label });
+    next.priorities.push({ id: newId(), what: item.what, who: item.who, when: item.when, status: 'none', pushed: false, carriedFrom: period.label });
     save(); renderPeriodPriorities(periodId); renderPeriodPriorities(next.id); showToast(`Priority carried into "${next.label}" ✓`);
   } else {
     if (!state.pendingPushes120) state.pendingPushes120 = [];
@@ -100,7 +100,7 @@ function pushPriority120(periodId: number, itemId: number): void {
   }
 }
 
-function editItem120(periodId: number, itemId: number): void {
+function editItem120(periodId: string, itemId: string): void {
   const period = state.periods120.find((p) => p.id === periodId); if (!period) return;
   const p = period.priorities.find((x) => x.id === itemId); if (!p) return;
   openEditModal(
@@ -114,19 +114,19 @@ function editItem120(periodId: number, itemId: number): void {
   );
 }
 
-function addPriority120(periodId: number): void {
+function addPriority120(periodId: string): void {
   openEditModal(
     'Add 120-Day Priority',
     `<div class="edit-field"><label>What</label><textarea id="ef-what" style="min-height:80px" placeholder="Describe the priority action…"></textarea></div><div class="edit-field"><label>Who</label><input id="ef-who" placeholder="e.g. Newms, Ommers" list="who-suggestions"></div><div class="edit-field"><label>By When</label><input id="ef-when" placeholder="e.g. Jun 2026"></div>`,
     ({ what, who, when }) => {
       const period = state.periods120.find((p) => p.id === periodId);
-      if (period) { const newId = Math.max(...period.priorities.map((x) => x.id), 0) + 1; period.priorities.push({ id: newId, what, who, when, status: 'none', pushed: false }); }
+      if (period) { period.priorities.push({ id: newId(), what, who, when, status: 'none', pushed: false }); }
       save(); renderPeriodPriorities(periodId); updateStats();
     },
   );
 }
 
-function deletePriority120(periodId: number, itemId: number): void {
+function deletePriority120(periodId: string, itemId: string): void {
   if (!confirm('Delete this priority?')) return;
   const period = state.periods120.find((p) => p.id === periodId);
   if (period) period.priorities = period.priorities.filter((x) => x.id !== itemId);
@@ -134,7 +134,7 @@ function deletePriority120(periodId: number, itemId: number): void {
 }
 
 /** Double-clicking a period tab. */
-function renamePeriod120(periodId: number): void {
+function renamePeriod120(periodId: string): void {
   const period = state.periods120.find((p) => p.id === periodId); if (!period) return;
   openEditModal(
     'Rename Period',
@@ -185,28 +185,28 @@ function createPeriod120(): void {
   const targetsRaw = byId<HTMLTextAreaElement>('new-120-targets').value.trim();
   if (!label) { alert('Please enter a period label.'); return; }
   const oneyear = targetsRaw ? targetsRaw.split('\n').map((v) => v.trim()).filter(Boolean) : [];
-  const priorities: Item[] = []; let pid = 1;
-  (state.pendingPushes120 || []).forEach((p) => { priorities.push({ id: pid++, what: p.what, who: p.who, when: p.when, status: 'none', pushed: false, carriedFrom: p.fromPeriod }); });
+  const priorities: Item[] = [];
+  (state.pendingPushes120 || []).forEach((p) => { priorities.push({ id: newId(), what: p.what, who: p.who, when: p.when, status: 'none', pushed: false, carriedFrom: p.fromPeriod }); });
   document.querySelectorAll('#task-rows-120 .form-row').forEach((row) => {
     const rowId = row.id.replace('trow120-', '');
     const what = (document.getElementById(`t120w-${rowId}`) as HTMLInputElement | null)?.value?.trim();
     const who = (document.getElementById(`t120who-${rowId}`) as HTMLInputElement | null)?.value;
     const when = (document.getElementById(`t120when-${rowId}`) as HTMLInputElement | null)?.value?.trim();
-    if (what) priorities.push({ id: pid++, what, who: who || 'Team', when: when || 'TBC', status: 'none', pushed: false });
+    if (what) priorities.push({ id: newId(), what, who: who || 'Team', when: when || 'TBC', status: 'none', pushed: false });
   });
   state.periods120.forEach((p) => p.current = false);
-  state.periods120.push({ id: Date.now(), label, period: period || label, current: true, oneyear, priorities });
+  state.periods120.push({ id: newId(), label, period: period || label, current: true, oneyear, priorities });
   state.pendingPushes120 = [];
   save(); closeNew120Modal(); render120Periods(); showToast(`Period "${label}" created ✓`);
 }
 
 /** The 120-day buttons: on each period's card and priority row, and in the New Period dialog. */
 export const periods120Actions: Actions = {
-  addPriority120: (el) => addPriority120(num(el, 'periodId')),
-  editItem120: (el) => editItem120(num(el, 'periodId'), num(el, 'itemId')),
-  deletePriority120: (el) => deletePriority120(num(el, 'periodId'), num(el, 'itemId')),
-  pushPriority120: (el) => pushPriority120(num(el, 'periodId'), num(el, 'itemId')),
-  setStatus120: (el) => setStatus120(num(el, 'periodId'), num(el, 'itemId'), oneOf(el, 'status', STATUSES)),
+  addPriority120: (el) => addPriority120(str(el, 'periodId')),
+  editItem120: (el) => editItem120(str(el, 'periodId'), str(el, 'itemId')),
+  deletePriority120: (el) => deletePriority120(str(el, 'periodId'), str(el, 'itemId')),
+  pushPriority120: (el) => pushPriority120(str(el, 'periodId'), str(el, 'itemId')),
+  setStatus120: (el) => setStatus120(str(el, 'periodId'), str(el, 'itemId'), oneOf(el, 'status', STATUSES)),
   showNew120Modal,
   closeNew120Modal,
   add120TaskRow,

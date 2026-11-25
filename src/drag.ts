@@ -10,7 +10,7 @@ let dragSrc: HTMLElement | null = null;
  * Make the rows of a priorities/tasks table draggable. Dropping a row moves it, reorders the
  * matching items in `state` to the new row order (by `data-id`) and saves.
  */
-export function initDragTable(tbodyId: string, type: 'priorities120' | 'tasks30', contextId: number): void {
+export function initDragTable(tbodyId: string, type: 'priorities120' | 'tasks30', contextId: string): void {
   const tbody = document.getElementById(tbodyId);
   if (!tbody) return;
   tbody.querySelectorAll('tr').forEach((row) => {
@@ -39,7 +39,7 @@ export function initDragTable(tbodyId: string, type: 'priorities120' | 'tasks30'
       const dropIdx = rows.indexOf(row);
       if (dragIdx < dropIdx) tbody.insertBefore(dragSrc, row.nextSibling);
       else tbody.insertBefore(dragSrc, row);
-      const newOrder = Array.from(tbody.querySelectorAll('tr')).map((r) => parseInt(r.getAttribute('data-id') ?? ''));
+      const newOrder = Array.from(tbody.querySelectorAll('tr')).map((r) => r.getAttribute('data-id') ?? '');
       if (type === 'priorities120') {
         const period = state.periods120.find((p) => p.id === contextId);
         if (period) {

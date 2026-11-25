@@ -1,15 +1,16 @@
 // The Coaching Sessions tab: the sessions table, the session dialog (#session-edit-overlay)
 // and the Session Notes card.
 
-import { num, type Actions } from '../actions.ts';
+import { str, type Actions } from '../actions.ts';
 import { byId } from '../dom.ts';
+import { newId } from '../ids.ts';
 import { state } from '../state.ts';
 import { save } from '../storage.ts';
 import type { Session } from '../types.ts';
 import { showToast } from '../ui.ts';
 
 /** The session being edited, or null when adding a new one. */
-let currentSessionId: number | null = null;
+let currentSessionId: string | null = null;
 let isNewSession = false;
 
 export function renderSessions(): void {
@@ -32,7 +33,7 @@ function showAddSessionModal(): void {
   byId('session-edit-overlay').classList.add('open');
 }
 
-function editSession(id: number): void {
+function editSession(id: string): void {
   const s = state.sessions.find((x) => x.id === id);
   if (!s) return;
   isNewSession = false;
@@ -55,8 +56,7 @@ function saveSessionEdit(): void {
   const done = byId<HTMLInputElement>('se-done').checked;
   if (!date || !focus) { alert('Please enter at least a date and focus.'); return; }
   if (isNewSession) {
-    const newId = Math.max(...state.sessions.map((s) => s.id), 0) + 1;
-    state.sessions.push({ id: newId, date, format, focus, notes, done });
+    state.sessions.push({ id: newId(), date, format, focus, notes, done });
   } else {
     const s = state.sessions.find((x) => x.id === currentSessionId);
     if (s) { s.date = date; s.format = format; s.focus = focus; s.notes = notes; s.done = done; }
@@ -100,7 +100,7 @@ function addNote(): void {
 /** The sessions buttons: Add Session, each row's Edit, the session dialog and Save Note. */
 export const sessionsActions: Actions = {
   showAddSessionModal,
-  editSession: (el) => editSession(num(el, 'sessionId')),
+  editSession: (el) => editSession(str(el, 'sessionId')),
   saveSessionEdit,
   deleteSession,
   closeSessionEditModal,

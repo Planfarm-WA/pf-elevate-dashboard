@@ -8,8 +8,8 @@ export type Status = (typeof STATUSES)[number];
 
 /** A 120-day priority or a 30-day task. */
 export interface Item {
-  /** Unique within its period or round: the highest id there + 1. */
-  id: number;
+  /** A UUID (newId()); the same in the app and in the database. */
+  id: string;
   what: string;
   who: string;
   /** Free text, e.g. "Jun 2026" or "TBC". */
@@ -22,8 +22,8 @@ export interface Item {
 }
 
 export interface Period120 {
-  /** Date.now() when the period was created. */
-  id: number;
+  /** A UUID (newId()); the same in the app and in the database. */
+  id: string;
   label: string;
   /** Free-text date range. */
   period: string;
@@ -34,8 +34,8 @@ export interface Period120 {
 }
 
 export interface Round30 {
-  /** Date.now() when the round was created. */
-  id: number;
+  /** A UUID (newId()); the same in the app and in the database. */
+  id: string;
   label: string;
   /** Free-text date range. */
   period: string;
@@ -46,7 +46,8 @@ export interface Round30 {
 }
 
 export interface Session {
-  id: number;
+  /** A UUID (newId()); the same in the app and in the database. */
+  id: string;
   /** Free text, e.g. "1 May 2026". */
   date: string;
   format: string;

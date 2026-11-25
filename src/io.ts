@@ -2,6 +2,7 @@
 // have, so changes to the state shape must still import older exports.
 
 import type { Actions } from './actions.ts';
+import { stringifyIds } from './ids.ts';
 import { migrateOneYear, renderBlueprint } from './sections/blueprint.ts';
 import { renderIssues } from './sections/issues.ts';
 import { render120Periods } from './sections/periods120.ts';
@@ -46,6 +47,7 @@ function importData(event: Event): void {
     if (data.blueprint) state.blueprint = data.blueprint;
     state.pendingPushes = data.pendingPushes || []; state.pendingPushes120 = data.pendingPushes120 || [];
     if (data.lastUpdated) state.lastUpdated = data.lastUpdated;
+    stringifyIds(state);
     save(); migrateOneYear(); renderBlueprint(); render120Periods(); render30(); renderSessions(); renderIssues(); updateStats(); updateLastUpdatedDisplay();
     showToast('Data imported successfully');
   };

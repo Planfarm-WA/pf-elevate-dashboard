@@ -12,8 +12,11 @@ const STORAGE_KEY = 'pf_elevate_blank1';
 
 // ---- The saved data, as these tests read it back from localStorage ----
 
+/** Ids are UUID strings; older saved data and export files used numbers (still accepted on load). */
+type Id = string | number;
+
 interface SavedItem {
-  id: number;
+  id: Id;
   what: string;
   who: string;
   when: string;
@@ -22,7 +25,7 @@ interface SavedItem {
   carriedFrom?: string;
 }
 interface SavedPeriod {
-  id: number;
+  id: Id;
   label: string;
   period: string;
   current: boolean;
@@ -30,7 +33,7 @@ interface SavedPeriod {
   priorities: SavedItem[];
 }
 interface SavedRound {
-  id: number;
+  id: Id;
   label: string;
   period: string;
   current: boolean;
@@ -38,7 +41,7 @@ interface SavedRound {
   tasks: SavedItem[];
 }
 interface SavedSession {
-  id: number;
+  id: Id;
   date: string;
   format: string;
   focus: string;
@@ -163,7 +166,7 @@ function fillRows(container: string, rows: Row[]): void {
   });
 }
 
-function createPeriod(label: string, period: string, rows: Row[] = []): number {
+function createPeriod(label: string, period: string, rows: Row[] = []): Id {
   act('showNew120Modal');
   setValue('#new-120-label', label);
   setValue('#new-120-period', period);
@@ -174,7 +177,7 @@ function createPeriod(label: string, period: string, rows: Row[] = []): number {
   return created.id;
 }
 
-function createRound(label: string, period: string, rows: Row[] = []): number {
+function createRound(label: string, period: string, rows: Row[] = []): Id {
   act('showNewRoundModal');
   setValue('#new-round-label', label);
   setValue('#new-round-period', period);
@@ -185,16 +188,34 @@ function createRound(label: string, period: string, rows: Row[] = []): number {
   return created.id;
 }
 
-function priority(periodIndex: number, id: number): SavedItem {
+function priority(periodIndex: number, id: Id): SavedItem {
   const found = saved().periods120[periodIndex]?.priorities.find((p) => p.id === id);
   if (!found) throw new Error(`No priority ${id} in period ${periodIndex}`);
   return found;
 }
 
-function task(roundIndex: number, id: number): SavedItem {
+function task(roundIndex: number, id: Id): SavedItem {
   const found = saved().rounds[roundIndex]?.tasks.find((t) => t.id === id);
   if (!found) throw new Error(`No task ${id} in round ${roundIndex}`);
   return found;
+}
+
+/** The id of the priority at `position` in a period (ids are random UUIDs, so tests look them up). */
+function priorityId(periodIndex: number, position: number): Id {
+  const item = saved().periods120[periodIndex]?.priorities[position];
+  if (!item) throw new Error(`No priority at position ${position} in period ${periodIndex}`);
+  return item.id;
+}
+
+function taskId(roundIndex: number, position: number): Id {
+  const item = saved().rounds[roundIndex]?.tasks[position];
+  if (!item) throw new Error(`No task at position ${position} in round ${roundIndex}`);
+  return item.id;
+}
+
+/** Older data uses numeric ids; loading or importing it turns them into strings. */
+function withStringIds<T extends { id: Id }>(items: T[]): T[] {
+  return items.map((item) => ({ ...item, id: String(item.id) }));
 }
 
 function isOpen(overlay: string): boolean {
@@ -246,8 +267,6 @@ function markupAndSources(): string[] {
 
 // ---- Setup ----
 
-let now = 0;
-
 beforeEach(() => {
   vi.resetModules();
   localStorage.clear();
@@ -256,9 +275,6 @@ beforeEach(() => {
   vi.stubGlobal('confirm', vi.fn(() => true));
   vi.stubGlobal('alert', vi.fn());
   vi.stubGlobal('print', vi.fn());
-  // New periods and rounds get Date.now() as their id; make each call distinct.
-  now = 1_750_000_000_000;
-  vi.spyOn(Date, 'now').mockImplementation(() => (now += 1000));
 });
 
 afterEach(() => {
@@ -402,8 +418,8 @@ describe('120-day priorities', () => {
       current: true,
       oneyear: ['Target A', 'Target B'],
       priorities: [
-        { id: 1, what: 'Fix fences', who: 'Sam', when: 'Feb', status: 'none', pushed: false },
-        { id: 2, what: 'Buy seed', who: 'Team', when: 'TBC', status: 'none', pushed: false },
+        { id: expect.any(String), what: 'Fix fences', who: 'Sam', when: 'Feb', status: 'none', pushed: false },
+        { id: expect.any(String), what: 'Buy seed', who: 'Team', when: 'TBC', status: 'none', pushed: false },
       ],
     });
     expect($('#modal-120-overlay').style.display).toBe('none');
@@ -424,25 +440,27 @@ describe('120-day priorities', () => {
     const id = createPeriod('Period 1', 'Jan – Apr', [['Fix fences', 'Sam', 'Feb']]);
     act('addPriority120', { periodId: id });
     saveEditDialog({ what: 'Buy seed', who: 'Alex', when: 'Mar' });
-    act('editItem120', { periodId: id, itemId: 1 });
+    const fix = priorityId(0, 0);
+    const seed = priorityId(0, 1);
+    act('editItem120', { periodId: id, itemId: fix });
     expect(value('#ef-what')).toBe('Fix fences');
     saveEditDialog({ what: 'Fix all fences', who: 'Sam', when: 'Apr' });
-    expect(priority(0, 1)).toMatchObject({ what: 'Fix all fences', who: 'Sam', when: 'Apr' });
-    expect(priority(0, 2)).toMatchObject({ what: 'Buy seed', who: 'Alex', when: 'Mar', status: 'none' });
+    expect(priority(0, fix)).toMatchObject({ what: 'Fix all fences', who: 'Sam', when: 'Apr' });
+    expect(priority(0, seed)).toMatchObject({ what: 'Buy seed', who: 'Alex', when: 'Mar', status: 'none' });
 
-    act('setStatus120', { periodId: id, itemId: 1, status: 'on-track' });
-    expect(priority(0, 1).status).toBe('on-track');
+    act('setStatus120', { periodId: id, itemId: fix, status: 'on-track' });
+    expect(priority(0, fix).status).toBe('on-track');
     expect($('#stat-120-ontrack').textContent).toBe('1');
-    act('setStatus120', { periodId: id, itemId: 1, status: 'on-track' });
-    expect(priority(0, 1).status).toBe('none');
+    act('setStatus120', { periodId: id, itemId: fix, status: 'on-track' });
+    expect(priority(0, fix).status).toBe('none');
 
-    act('setStatus120', { periodId: id, itemId: 2, status: 'complete' });
+    act('setStatus120', { periodId: id, itemId: seed, status: 'complete' });
     expect($('#stat-120-done').textContent).toBe('1');
     expect($(`#prog-120-text-${id}`).textContent).toBe('1 of 2 complete');
     expect($$(`#body-120-${id} tr`)[1].className).toBe('status-complete');
 
-    act('deletePriority120', { periodId: id, itemId: 2 });
-    expect(saved().periods120[0].priorities.map((p) => p.id)).toEqual([1]);
+    act('deletePriority120', { periodId: id, itemId: seed });
+    expect(saved().periods120[0].priorities.map((p) => p.id)).toEqual([fix]);
   });
 
   it('pushes priorities into the queue, then into the next period', async () => {
@@ -451,8 +469,10 @@ describe('120-day priorities', () => {
       ['Fix fences', 'Sam', 'Feb'],
       ['Buy seed', 'Alex', 'Mar'],
     ]);
-    act('pushPriority120', { periodId: first, itemId: 1 });
-    expect(priority(0, 1).pushed).toBe(true);
+    const fix = priorityId(0, 0);
+    const seed = priorityId(0, 1);
+    act('pushPriority120', { periodId: first, itemId: fix });
+    expect(priority(0, fix).pushed).toBe(true);
     expect(saved().pendingPushes120).toEqual([{ what: 'Fix fences', who: 'Sam', when: 'Feb', fromPeriod: 'Period 1' }]);
     expect($(`#body-120-${first}`).textContent).toContain('Pushed ✓');
     expect(document.body.textContent).toContain('Priority will be added to the next new period you create ✓');
@@ -465,13 +485,13 @@ describe('120-day priorities', () => {
     expect(p1.current).toBe(false);
     expect(p2).toMatchObject({ label: 'Period 2', period: 'Period 2', current: true });
     expect(p2.priorities).toEqual([
-      { id: 1, what: 'Fix fences', who: 'Sam', when: 'Feb', status: 'none', pushed: false, carriedFrom: 'Period 1' },
+      { id: expect.any(String), what: 'Fix fences', who: 'Sam', when: 'Feb', status: 'none', pushed: false, carriedFrom: 'Period 1' },
     ]);
     expect(saved().pendingPushes120).toEqual([]);
 
-    act('pushPriority120', { periodId: first, itemId: 2 });
+    act('pushPriority120', { periodId: first, itemId: seed });
     expect(saved().periods120[1].priorities.at(-1)).toEqual({
-      id: 2,
+      id: expect.any(String),
       what: 'Buy seed',
       who: 'Alex',
       when: 'Mar',
@@ -510,30 +530,33 @@ describe('30-day to-dos', () => {
       current: true,
       notes: '',
       tasks: [
-        { id: 1, what: 'Order fuel', who: 'Sam', when: '10 May', status: 'none', pushed: false },
-        { id: 2, what: 'Book vet', who: 'Team', when: 'TBC', status: 'none', pushed: false },
+        { id: expect.any(String), what: 'Order fuel', who: 'Sam', when: '10 May', status: 'none', pushed: false },
+        { id: expect.any(String), what: 'Book vet', who: 'Team', when: 'TBC', status: 'none', pushed: false },
       ],
     });
 
     act('addTask30', { roundId: first });
     saveEditDialog({ what: 'Fix pump', who: 'Alex', when: '20 May' });
-    act('editItem30', { roundId: first, taskId: 2 });
+    const fuel = taskId(0, 0);
+    const vet = taskId(0, 1);
+    const pump = taskId(0, 2);
+    act('editItem30', { roundId: first, taskId: vet });
     saveEditDialog({ what: 'Book the vet', who: 'Sam', when: '15 May' });
-    expect(task(0, 2)).toMatchObject({ what: 'Book the vet', who: 'Sam', when: '15 May' });
+    expect(task(0, vet)).toMatchObject({ what: 'Book the vet', who: 'Sam', when: '15 May' });
 
-    act('setStatus30', { roundId: first, taskId: 3, status: 'complete' });
+    act('setStatus30', { roundId: first, taskId: pump, status: 'complete' });
     expect($('#stat-30-done').textContent).toBe('1 / 3');
     expect($('#stat-30-ontrack').textContent).toBe('33%');
-    act('setStatus30', { roundId: first, taskId: 3, status: 'complete' });
-    expect(task(0, 3).status).toBe('none');
-    act('deleteTask30', { roundId: first, taskId: 3 });
-    expect(saved().rounds[0].tasks.map((t) => t.id)).toEqual([1, 2]);
+    act('setStatus30', { roundId: first, taskId: pump, status: 'complete' });
+    expect(task(0, pump).status).toBe('none');
+    act('deleteTask30', { roundId: first, taskId: pump });
+    expect(saved().rounds[0].tasks.map((t) => t.id)).toEqual([fuel, vet]);
 
     setValue(`#notes-${first}`, 'Good session');
     act('saveRoundNotes', { roundId: first }, 'input');
     expect(saved().rounds[0].notes).toBe('Good session');
 
-    act('pushTask', { roundId: first, taskId: 1 });
+    act('pushTask', { roundId: first, taskId: fuel });
     expect(saved().pendingPushes).toEqual([{ what: 'Order fuel', who: 'Sam', when: '10 May', fromRound: 'Round 1' }]);
     act('showNewRoundModal');
     expect($('#pushed-tasks-notice').textContent).toContain('1 task will be carried over');
@@ -546,12 +569,12 @@ describe('30-day to-dos', () => {
       label: 'Round 2',
       period: 'Round 2',
       current: true,
-      tasks: [{ id: 1, what: 'Order fuel', who: 'Sam', when: '10 May', status: 'none', pushed: false, carriedFrom: 'Round 1' }],
+      tasks: [{ id: expect.any(String), what: 'Order fuel', who: 'Sam', when: '10 May', status: 'none', pushed: false, carriedFrom: 'Round 1' }],
     });
     expect(saved().pendingPushes).toEqual([]);
 
-    act('pushTask', { roundId: first, taskId: 2 });
-    expect(task(1, 2)).toMatchObject({ what: 'Book the vet', carriedFrom: 'Round 1' });
+    act('pushTask', { roundId: first, taskId: vet });
+    expect(task(1, taskId(1, 1))).toMatchObject({ what: 'Book the vet', carriedFrom: 'Round 1' });
 
     $(`#tab-${second}`).dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
     expect($('#edit-title').textContent).toBe('Rename Round');
@@ -580,11 +603,11 @@ describe('coaching sessions', () => {
     setValue('#se-notes', 'Bring numbers');
     act('saveSessionEdit');
     expect(saved().sessions).toEqual([
-      { id: 1, date: '1 May 2026', format: 'Teams', focus: 'Round 1 review', notes: 'Bring numbers', done: false },
+      { id: expect.any(String), date: '1 May 2026', format: 'Teams', focus: 'Round 1 review', notes: 'Bring numbers', done: false },
     ]);
     expect(isOpen('#session-edit-overlay')).toBe(false);
 
-    act('editSession', { sessionId: 1 });
+    act('editSession', { sessionId: saved().sessions[0].id });
     expect($('#session-edit-title').textContent).toBe('Edit Session');
     expect(value('#se-focus')).toBe('Round 1 review');
     ($('#se-done') as HTMLInputElement).checked = true;
@@ -593,7 +616,7 @@ describe('coaching sessions', () => {
     expect(saved().sessions[0]).toMatchObject({ focus: 'Round 1 wrap-up', done: true });
     expect($('#sessions-tbody').textContent).toContain('✓ Done');
 
-    act('editSession', { sessionId: 1 });
+    act('editSession', { sessionId: saved().sessions[0].id });
     act('deleteSession');
     expect(saved().sessions).toEqual([]);
     expect(isOpen('#session-edit-overlay')).toBe(false);
@@ -646,7 +669,7 @@ describe('export and import', () => {
       version: 3,
       periods120: [],
       rounds: [],
-      sessions: data.sessions,
+      sessions: withStringIds(data.sessions),
       blueprint: data.blueprint,
       pendingPushes: data.pendingPushes,
       pendingPushes120: [],
@@ -686,9 +709,9 @@ describe('export and import', () => {
     };
     importFile(new File([JSON.stringify(imported)], 'backup.json', { type: 'application/json' }));
 
-    await vi.waitFor(() => expect(saved().sessions).toEqual(imported.sessions));
+    await vi.waitFor(() => expect(saved().sessions).toEqual(withStringIds(imported.sessions)));
     expect(confirm).toHaveBeenCalledWith('This will replace all current data. Continue?');
-    expect(saved().periods120).toEqual(imported.periods120);
+    expect(saved().periods120).toEqual(withStringIds(imported.periods120).map((p) => ({ ...p, priorities: withStringIds(p.priorities) })));
     expect($$('#body-120-5 tr')).toHaveLength(1);
     expect($('#sessions-tbody').textContent).toContain('Imported session');
     expect($('#sessions-tbody').textContent).not.toContain('Old session');
@@ -709,7 +732,7 @@ describe('printing', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     await startApp();
     const id = createPeriod('Period 1', 'Jan', [['Fix fences'], ['Buy seed']]);
-    act('setStatus120', { periodId: id, itemId: 1, status: 'complete' });
+    act('setStatus120', { periodId: id, itemId: priorityId(0, 0), status: 'complete' });
 
     act('printPeriod120', { periodId: id });
     expect(print).toHaveBeenCalledTimes(1);

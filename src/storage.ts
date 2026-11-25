@@ -1,3 +1,4 @@
+import { stringifyIds } from './ids.ts';
 import { state } from './state.ts';
 import type { State } from './types.ts';
 
@@ -44,6 +45,7 @@ export function loadSaved(): void {
         state.pendingPushes = parsed.pendingPushes || [];
         state.pendingPushes120 = parsed.pendingPushes120 || [];
         state.lastUpdated = parsed.lastUpdated || parsed.exportedAt || null;
+        stringifyIds(state);
       }
     }
   } catch (err) {

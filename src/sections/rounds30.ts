@@ -1,9 +1,10 @@
 // The 30-Day To-Do's tab: one tab per round, its tasks, statuses, "Push →", the round's coaching
 // notes, renaming, and the New Round dialog (#modal-overlay). The last round is the active one.
 
-import { num, oneOf, type Actions } from '../actions.ts';
+import { num, oneOf, str, type Actions } from '../actions.ts';
 import { byId } from '../dom.ts';
 import { initDragTable } from '../drag.ts';
+import { newId } from '../ids.ts';
 import { openEditModal } from '../edit-modal.ts';
 import { state } from '../state.ts';
 import { updateStats } from '../stats.ts';
@@ -40,7 +41,7 @@ export function render30(): void {
   updateStats();
 }
 
-export function renderRoundTasks(roundId: number): void {
+export function renderRoundTasks(roundId: string): void {
   const round = state.rounds.find((r) => r.id === roundId); if (!round) return;
   const tbody = document.getElementById(`tasks-${roundId}`); if (!tbody) return;
   tbody.innerHTML = '';
@@ -51,7 +52,7 @@ export function renderRoundTasks(roundId: number): void {
     const pushBtn = canPush ? `<button class="push-btn" data-click="pushTask" data-round-id="${roundId}" data-task-id="${t.id}">Push →</button>` : t.pushed ? `<span class="push-btn pushed">Pushed ✓</span>` : '';
     const tr = document.createElement('tr');
     tr.className = t.status === 'complete' ? 'status-complete' : t.status === 'off-track' ? 'status-off-track' : '';
-    tr.setAttribute('draggable', 'true'); tr.setAttribute('data-id', String(t.id));
+    tr.setAttribute('draggable', 'true'); tr.setAttribute('data-id', t.id);
     tr.innerHTML = `<td style="width:20px;cursor:grab;color:var(--grey-light);font-size:16px;text-align:center" class="drag-handle">⠿</td><td><div class="status-btns"><button class="status-btn ${t.status === 'on-track' ? 'active-on-track' : ''}" data-click="setStatus30" data-round-id="${roundId}" data-task-id="${t.id}" data-status="on-track">✓ On Track</button><button class="status-btn ${t.status === 'off-track' ? 'active-off-track' : ''}" data-click="setStatus30" data-round-id="${roundId}" data-task-id="${t.id}" data-status="off-track">✗ Off Track</button><button class="status-btn ${t.status === 'complete' ? 'active-complete' : ''}" data-click="setStatus30" data-round-id="${roundId}" data-task-id="${t.id}" data-status="complete">★ Complete</button></div></td><td class="${t.status === 'complete' ? 'task-text' : ''}">${t.what}${t.pushed ? '<span class="pushed-label">Pushed →</span>' : ''}</td><td>${badgeFor(t.who)}</td><td style="font-size:12px;color:var(--grey-light);white-space:nowrap">${t.when}</td><td style="display:flex;gap:4px;align-items:center;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" data-click="editItem30" data-round-id="${roundId}" data-task-id="${t.id}">✏️</button><button class="btn btn-danger btn-sm" data-click="deleteTask30" data-round-id="${roundId}" data-task-id="${t.id}">🗑</button>${pushBtn}</td>`;
     tbody.appendChild(tr);
   });
@@ -65,14 +66,14 @@ export function renderRoundTasks(roundId: number): void {
 }
 
 /** A status button. Clicking the active status sets it back to 'none'. */
-function setStatus30(roundId: number, taskId: number, status: Status): void {
+function setStatus30(roundId: string, taskId: string, status: Status): void {
   const round = state.rounds.find((r) => r.id === roundId); if (!round) return;
   const t = round.tasks.find((x) => x.id === taskId);
   if (t) { const wasComplete = t.status !== 'complete'; t.status = t.status === status ? 'none' : status; if (status === 'complete' && wasComplete && t.status === 'complete') playBing(); save(); renderRoundTasks(roundId); }
 }
 
 /** Clicking a round tab. It clears every .round-tab and .round-panel, the 120-day ones included. */
-function switchRound(id: number): void {
+function switchRound(id: string): void {
   document.querySelectorAll('.round-tab').forEach((t) => t.classList.remove('active'));
   document.querySelectorAll('.round-panel').forEach((p) => p.classList.remove('active'));
   document.getElementById(`tab-${id}`)?.classList.add('active');
@@ -80,21 +81,20 @@ function switchRound(id: number): void {
 }
 
 /** The round's coaching notes box; saves on every keystroke. */
-function saveRoundNotes(roundId: number): void {
+function saveRoundNotes(roundId: string): void {
   const round = state.rounds.find((r) => r.id === roundId);
   if (round) { round.notes = byId<HTMLTextAreaElement>(`notes-${roundId}`).value; save(); }
 }
 
 /** "Push →": copy the task into the next round, or queue it until one is created. */
-function pushTask(roundId: number, taskId: number): void {
+function pushTask(roundId: string, taskId: string): void {
   const round = state.rounds.find((r) => r.id === roundId); if (!round) return;
   const t = round.tasks.find((x) => x.id === taskId); if (!t) return;
   t.pushed = true;
   const roundIdx = state.rounds.findIndex((r) => r.id === roundId);
   const nextRound = state.rounds[roundIdx + 1];
   if (nextRound) {
-    const newId = Math.max(...nextRound.tasks.map((x) => x.id), 0) + 1;
-    nextRound.tasks.push({ id: newId, what: t.what, who: t.who, when: t.when, status: 'none', pushed: false, carriedFrom: round.label });
+    nextRound.tasks.push({ id: newId(), what: t.what, who: t.who, when: t.when, status: 'none', pushed: false, carriedFrom: round.label });
     save(); renderRoundTasks(roundId); renderRoundTasks(nextRound.id); showToast(`Task carried into "${nextRound.label}" ✓`);
   } else {
     if (!state.pendingPushes) state.pendingPushes = [];
@@ -103,26 +103,26 @@ function pushTask(roundId: number, taskId: number): void {
   }
 }
 
-function addTask30(roundId: number): void {
+function addTask30(roundId: string): void {
   openEditModal(
     'Add Task',
     `<div class="edit-field"><label>What</label><textarea id="ef-what" style="min-height:80px" placeholder="Describe the task…"></textarea></div><div class="edit-field"><label>Who</label><input id="ef-who" placeholder="e.g. Newms, Ommers" list="who-suggestions"></div><div class="edit-field"><label>By When</label><input id="ef-when" placeholder="e.g. 31 May 2026"></div>`,
     ({ what, who, when }) => {
       const round = state.rounds.find((r) => r.id === roundId);
-      if (round) { const newId = Math.max(...round.tasks.map((x) => x.id), 0) + 1; round.tasks.push({ id: newId, what, who, when, status: 'none', pushed: false }); }
+      if (round) { round.tasks.push({ id: newId(), what, who, when, status: 'none', pushed: false }); }
       save(); renderRoundTasks(roundId);
     },
   );
 }
 
-function deleteTask30(roundId: number, taskId: number): void {
+function deleteTask30(roundId: string, taskId: string): void {
   if (!confirm('Delete this task?')) return;
   const round = state.rounds.find((r) => r.id === roundId);
   if (round) round.tasks = round.tasks.filter((t) => t.id !== taskId);
   save(); renderRoundTasks(roundId);
 }
 
-function editItem30(roundId: number, taskId: number): void {
+function editItem30(roundId: string, taskId: string): void {
   const round = state.rounds.find((r) => r.id === roundId); if (!round) return;
   const t = round.tasks.find((x) => x.id === taskId); if (!t) return;
   openEditModal(
@@ -137,7 +137,7 @@ function editItem30(roundId: number, taskId: number): void {
 }
 
 /** Double-clicking a round tab. */
-function renameRound(roundId: number): void {
+function renameRound(roundId: string): void {
   const round = state.rounds.find((r) => r.id === roundId); if (!round) return;
   openEditModal(
     'Rename Round',
@@ -191,29 +191,29 @@ function createRound(): void {
   const label = byId<HTMLInputElement>('new-round-label').value.trim();
   const period = byId<HTMLInputElement>('new-round-period').value.trim();
   if (!label) { alert('Please enter a round label.'); return; }
-  const tasks: Item[] = []; let taskId = 1;
-  (state.pendingPushes || []).forEach((p) => { tasks.push({ id: taskId++, what: p.what, who: p.who, when: p.when, status: 'none', pushed: false, carriedFrom: p.fromRound }); });
+  const tasks: Item[] = [];
+  (state.pendingPushes || []).forEach((p) => { tasks.push({ id: newId(), what: p.what, who: p.who, when: p.when, status: 'none', pushed: false, carriedFrom: p.fromRound }); });
   document.querySelectorAll('#task-rows .form-row').forEach((row) => {
     const rowId = row.id.replace('trow-', '');
     const what = (document.getElementById(`tw-${rowId}`) as HTMLInputElement | null)?.value?.trim();
     const who = (document.getElementById(`twho-${rowId}`) as HTMLInputElement | null)?.value;
     const when = (document.getElementById(`twhen-${rowId}`) as HTMLInputElement | null)?.value?.trim();
-    if (what) tasks.push({ id: taskId++, what, who: who || 'Team', when: when || 'TBC', status: 'none', pushed: false });
+    if (what) tasks.push({ id: newId(), what, who: who || 'Team', when: when || 'TBC', status: 'none', pushed: false });
   });
   state.rounds.forEach((r) => r.current = false);
-  state.rounds.push({ id: Date.now(), label, period: period || label, current: true, notes: '', tasks });
+  state.rounds.push({ id: newId(), label, period: period || label, current: true, notes: '', tasks });
   state.pendingPushes = [];
   save(); closeModal(); render30();
 }
 
 /** The 30-day buttons and notes box: on each round's card and task row, and in the New Round dialog. */
 export const rounds30Actions: Actions = {
-  addTask30: (el) => addTask30(num(el, 'roundId')),
-  editItem30: (el) => editItem30(num(el, 'roundId'), num(el, 'taskId')),
-  deleteTask30: (el) => deleteTask30(num(el, 'roundId'), num(el, 'taskId')),
-  pushTask: (el) => pushTask(num(el, 'roundId'), num(el, 'taskId')),
-  setStatus30: (el) => setStatus30(num(el, 'roundId'), num(el, 'taskId'), oneOf(el, 'status', STATUSES)),
-  saveRoundNotes: (el) => saveRoundNotes(num(el, 'roundId')),
+  addTask30: (el) => addTask30(str(el, 'roundId')),
+  editItem30: (el) => editItem30(str(el, 'roundId'), str(el, 'taskId')),
+  deleteTask30: (el) => deleteTask30(str(el, 'roundId'), str(el, 'taskId')),
+  pushTask: (el) => pushTask(str(el, 'roundId'), str(el, 'taskId')),
+  setStatus30: (el) => setStatus30(str(el, 'roundId'), str(el, 'taskId'), oneOf(el, 'status', STATUSES)),
+  saveRoundNotes: (el) => saveRoundNotes(str(el, 'roundId')),
   showNewRoundModal,
   closeModal,
   addTaskRow,

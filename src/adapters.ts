@@ -72,7 +72,7 @@ function status(value: unknown, path: string): Status {
 function parseItem(value: unknown, path: string): Item {
   const o = asObject(value, path);
   const item: Item = {
-    id: 0, // ids aren't imported; the database makes new ones
+    id: '', // ids aren't imported; the database makes new ones
     what: text(o.what, `${path}.what`),
     who: text(o.who, `${path}.who`),
     when: text(o.when, `${path}.when`),
@@ -106,7 +106,7 @@ function parseBlueprint(value: unknown): Blueprint {
 function parsePeriod(value: unknown, path: string): Period120 {
   const o = asObject(value, path);
   return {
-    id: 0,
+    id: '',
     label: text(o.label, `${path}.label`),
     period: text(o.period, `${path}.period`),
     current: Boolean(o.current),
@@ -118,7 +118,7 @@ function parsePeriod(value: unknown, path: string): Period120 {
 function parseRound(value: unknown, path: string): Round30 {
   const o = asObject(value, path);
   return {
-    id: 0,
+    id: '',
     label: text(o.label, `${path}.label`),
     period: text(o.period, `${path}.period`),
     current: Boolean(o.current),
@@ -130,7 +130,7 @@ function parseRound(value: unknown, path: string): Round30 {
 function parseSession(value: unknown, path: string): Session {
   const o = asObject(value, path);
   return {
-    id: 0,
+    id: '',
     date: text(o.date, `${path}.date`),
     format: text(o.format, `${path}.format`),
     focus: text(o.focus, `${path}.focus`),

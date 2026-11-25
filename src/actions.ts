@@ -71,6 +71,13 @@ export function num(el: HTMLElement, key: string): number {
   return value;
 }
 
+/** A text argument, e.g. an id: str(el, 'periodId') reads data-period-id. Throws if it's missing or empty. */
+export function str(el: HTMLElement, key: string): string {
+  const raw = el.dataset[key];
+  if (!raw) throw new Error(`${attributeName(key)} must not be empty`);
+  return raw;
+}
+
 /** An argument limited to `allowed`, e.g. oneOf(el, 'status', STATUSES). Throws if it's anything else. */
 export function oneOf<T extends string>(el: HTMLElement, key: string, allowed: readonly T[]): T {
   const raw = el.dataset[key];

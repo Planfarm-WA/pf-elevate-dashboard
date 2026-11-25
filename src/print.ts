@@ -2,7 +2,7 @@
 // The @media print rules in styles.css do the layout: body.printing-single shows only the
 // .print-target section and panel, and the .print-status labels are only visible in print.
 
-import { num, type Actions } from './actions.ts';
+import { str, type Actions } from './actions.ts';
 import { byId } from './dom.ts';
 import { renderBlueprint } from './sections/blueprint.ts';
 import { renderIssues } from './sections/issues.ts';
@@ -29,7 +29,7 @@ function cleanupPrintStatusSpans(): void {
   document.querySelectorAll('.print-status').forEach((el) => el.remove());
 }
 
-function printPeriod120(periodId: number): void {
+function printPeriod120(periodId: string): void {
   renderPeriodPriorities(periodId); addPrintStatusSpans();
   document.querySelectorAll('.section').forEach((s) => s.classList.remove('print-target'));
   document.querySelectorAll('.round-panel').forEach((p) => p.classList.remove('print-target'));
@@ -40,7 +40,7 @@ function printPeriod120(periodId: number): void {
   setTimeout(() => { document.body.classList.remove('printing-single'); document.querySelectorAll('.print-target').forEach((el) => el.classList.remove('print-target')); cleanupPrintStatusSpans(); }, 1000);
 }
 
-function printRound30(roundId: number): void {
+function printRound30(roundId: string): void {
   renderRoundTasks(roundId); addPrintStatusSpans();
   document.querySelectorAll('.section').forEach((s) => s.classList.remove('print-target'));
   document.querySelectorAll('.round-panel').forEach((p) => p.classList.remove('print-target'));
@@ -60,6 +60,6 @@ function printAll(): void {
 /** The header's Print button and the Print button on each period and round card. */
 export const printActions: Actions = {
   printAll,
-  printPeriod120: (el) => printPeriod120(num(el, 'periodId')),
-  printRound30: (el) => printRound30(num(el, 'roundId')),
+  printPeriod120: (el) => printPeriod120(str(el, 'periodId')),
+  printRound30: (el) => printRound30(str(el, 'roundId')),
 };
