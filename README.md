@@ -38,11 +38,20 @@ The browser stores data under a fixed name (`pf_elevate_blank1`). Copies served 
 
 ## Supabase database (in progress)
 
-The dashboard is moving from browser storage to Supabase, so data is shared and backed up centrally. `supabase/schema.sql` creates the tables. **The dashboard does not use them yet.**
+The dashboard is moving from browser storage to Supabase, so data is shared and backed up centrally. The files in `supabase/migrations/` create the tables. **The dashboard does not use them yet.**
 
 ### Creating the tables
 
-1. In your Supabase project, open **SQL Editor**, paste the contents of `supabase/schema.sql` and click **Run**.
+1. Apply the migrations with the [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started), which is installed as a project dependency (needs [pnpm](https://pnpm.io)). From the repository folder, the first time only:
+   ```sh
+   pnpm install                                    # installs the Supabase CLI
+   pnpm supabase link --project-ref <project-ref>  # the ID in your project's URL
+   ```
+   Then, whenever there are new migrations:
+   ```sh
+   pnpm supabase db push
+   ```
+   You can also paste a migration into the **SQL Editor** and click **Run**, but the CLI won't record it as applied.
 2. Create your own login under **Authentication → Users**.
 3. Make yourself staff by running this in the SQL Editor, with your email:
    ```sql
@@ -84,6 +93,6 @@ Dates such as "By When" are stored as text, because the dashboard accepts entrie
 
 ```
 index.html            The dashboard: page, styles and code in one file
-supabase/schema.sql   Database tables and access rules for Supabase
+supabase/migrations/  Database tables and access rules for Supabase (CLI migrations)
 CLAUDE.md             Notes for Claude Code when working on this repository
 ```

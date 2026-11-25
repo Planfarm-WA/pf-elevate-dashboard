@@ -6,9 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 The Planfarm Elevate coaching dashboard: a single static page, `index.html`, holding the CSS (`<style>`), the markup and all the JavaScript (one `<script>` at the end). It is a blank per-client template: the header `<h1>Client Name</h1>` and the "Who" suggestions (`<datalist id="who-suggestions">`) are placeholders edited for each client.
 
-There is no build step, package manager, linter or test suite. To run it, open `index.html` in a browser, or serve the folder (`python3 -m http.server`) and open it there. The only external resource is Google Fonts (DM Sans, Fraunces).
+The page has no build step, linter or test suite. To run it, open `index.html` in a browser, or serve the folder (`python3 -m http.server`) and open it there. The only external resource is Google Fonts (DM Sans, Fraunces).
 
-`supabase/schema.sql` is the planned database schema. **The app does not use Supabase yet.** It still reads and writes `localStorage` only.
+`package.json` (pnpm) exists only to install the Supabase CLI as a project dependency. Run it as `pnpm supabase <command>`, not bare `supabase`. The page itself uses no npm packages.
+
+`supabase/migrations/` holds the planned database schema. **The app does not use Supabase yet.** It still reads and writes `localStorage` only.
 
 ## How the page works
 
@@ -35,9 +37,11 @@ There is no build step, package manager, linter or test suite. To run it, open `
 
 `exportData()` downloads `planfarm-elevate-dashboard-YYYY-MM-DD.json` with `version: 3` and the state keys above. `importData()` accepts any file that has `version` and `blueprint`, and replaces the whole state. Clients already have these files, so changes to the state shape must still import older exports.
 
-## Supabase schema (`supabase/schema.sql`)
+## Supabase schema (`supabase/migrations/`)
 
-One script, run in the Supabase SQL Editor, wrapped in a single transaction.
+Supabase CLI migrations. `000_initial_schema.sql` creates everything, wrapped in a single transaction. Apply with `pnpm supabase db push`, which records each migration as applied. `supabase/config.toml` (from `supabase init`) is the CLI's project config; a new checkout only needs `pnpm install` and `pnpm supabase link --project-ref <ref>`.
+
+- **Migrations:** until the initial migration has been run on the real project, edit it in place. After that, never edit an applied migration. Put each change in a new file (`pnpm supabase migration new <name>`).
 
 - **Naming:** a farm business is a row in `businesses`; a "client" is a login that belongs to a business (a row in `clients`, linking `business_id` to `auth.users`). In `index.html` and the README's per-copy setup, "client" still means the farm itself.
 - **Structure:** everything belongs to `businesses` via `business_id`. Each JSON list becomes a table with a `sort_order` column.
@@ -64,13 +68,13 @@ grant usage on schema auth, public to anon, authenticated;
 grant execute on function auth.uid() to anon, authenticated;
 ```
 
-Then run `psql -v ON_ERROR_STOP=1 -f supabase/schema.sql`. To test RLS as a user, use `set role authenticated; set request.jwt.claim.sub = '<user uuid>';`.
+Then run each migration in order, e.g. `psql -v ON_ERROR_STOP=1 -f supabase/migrations/000_initial_schema.sql`. To test RLS as a user, use `set role authenticated; set request.jwt.claim.sub = '<user uuid>';`.
 
 ## To-do
 
 Roughly in order. The schema has been reviewed but not yet run on the real Supabase project.
 
-1. **Run the schema on Supabase** and add the first staff user (snippet at the bottom of `schema.sql`). Adjust the tables after reviewing them in the table editor.
+1. **Run the schema on Supabase** with `pnpm supabase db push` and add the first staff user (snippet at the bottom of the initial migration). Adjust the tables after reviewing them in the table editor.
 2. **Import existing JSON exports** into the tables, e.g. a SQL function `import_dashboard(business_id uuid, data jsonb)`. The import has to map:
    - `threeyear`: split on blank lines, with `done` taken from `threeyearDone[index]`.
    - `issues`: an `OPPORTUNITY: ` prefix becomes `kind = 'opportunity'`.

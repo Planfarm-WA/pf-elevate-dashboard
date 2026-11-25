@@ -1,0 +1,5 @@
+node_modules/
+
+# Local secrets (the Supabase CLI reads supabase/.env)
+.env
+.env.*
