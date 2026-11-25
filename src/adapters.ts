@@ -194,13 +194,16 @@ export interface DashboardRows {
   sessions?: RowFor<'coaching_sessions', 'business_id'>[];
 }
 
+// The rules below are shared with src/rows.ts (the Supabase sync), so imports and syncing agree.
+
 /** Index of the last item marked current, or -1. The database allows one current per business. */
-function lastCurrent(items: { current: boolean }[]): number {
+export function lastCurrent(items: { current: boolean }[]): number {
   for (let i = items.length - 1; i >= 0; i--) if (items[i].current) return i;
   return -1;
 }
 
-function itemRow(item: Item, sortOrder: number) {
+/** A priority or task as a row, without its id and parent id. */
+export function itemRow(item: Item, sortOrder: number) {
   return {
     what: item.what,
     who: item.who,
@@ -212,11 +215,23 @@ function itemRow(item: Item, sortOrder: number) {
   };
 }
 
+/** The 3-year items in the text, split and indexed the same way as renderThreeYearTargets(). */
+export function threeYearLines(text: string): string[] {
+  return text.split('\n\n').map((line) => line.trim()).filter(Boolean);
+}
+
+/** An issue as stored: the "OPPORTUNITY:" prefix becomes kind = 'opportunity' and leaves the text. */
+export function issueRow(issue: string): { kind: 'issue' | 'opportunity'; text: string } {
+  return issue.startsWith('OPPORTUNITY:')
+    ? { kind: 'opportunity', text: issue.replace(/^OPPORTUNITY:\s*/, '') }
+    : { kind: 'issue', text: issue };
+}
+
 /** Convert a checked export into rows. Array position becomes sort_order. */
 export function exportToRows(file: ParsedExport): DashboardRows {
   const bp = file.blueprint;
-  // The same split and indexing as renderThreeYearTargets(): threeyearDone counts non-empty items.
-  const threeYear = bp.threeyear.split('\n\n').map((line) => line.trim()).filter(Boolean);
+  // threeyearDone counts the non-empty items, as on the page.
+  const threeYear = threeYearLines(bp.threeyear);
   const currentPeriod = file.periods120 ? lastCurrent(file.periods120) : -1;
   const currentRound = file.rounds ? lastCurrent(file.rounds) : -1;
   return {
@@ -224,9 +239,7 @@ export function exportToRows(file: ParsedExport): DashboardRows {
     coreValues: bp.values.map((value, i) => ({ text: value, sort_order: i })),
     threeYearItems: threeYear.map((line, i) => ({ text: line, done: !!bp.threeyearDone?.[i], sort_order: i })),
     oneYearTargets: bp.oneyear.map((target, i) => ({ text: target.text, done: target.done, sort_order: i })),
-    issues: bp.issues.map((issue, i) => issue.startsWith('OPPORTUNITY:')
-      ? { kind: 'opportunity' as const, text: issue.replace(/^OPPORTUNITY:\s*/, ''), sort_order: i }
-      : { kind: 'issue' as const, text: issue, sort_order: i }),
+    issues: bp.issues.map((issue, i) => ({ ...issueRow(issue), sort_order: i })),
     periods: file.periods120?.map((p, i) => ({
       period: { label: p.label, period: p.period, is_current: i === currentPeriod, one_year_targets: p.oneyear ?? [], sort_order: i },
       priorities: p.priorities.map((item, j) => itemRow(item, j)),
