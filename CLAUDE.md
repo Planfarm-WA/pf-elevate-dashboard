@@ -192,12 +192,35 @@ Roughly in order.
 - The app logs in and syncs to Supabase (the "Saving in Supabase mode" section above).
 - The site is on Vercel, deployed from `main`. Vercel needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` set for Production and Preview. Supabase Auth should have "Allow new users to sign up" turned off, because staff create the logins.
 
-1. **Escape user text** before it goes into `innerHTML` and `value="..."` attributes. A quote or `<` breaks the forms, and with shared data one user's text now reaches other users.
-2. **Per-business sign-up links**, so clients set their own password. This needs:
+1. **Check and roll out the Supabase switch** (in progress; picked up again on 2026-11-26). The code is done and tested on branch `supabase-schema`, which was 8 commits ahead of GitHub on 2026-11-25. What's left is for the user:
+   1. **Try it locally against the local Supabase:**
+      ```sh
+      pnpm supabase start
+      pnpm supabase status            # the local API URL and publishable key
+      export VITE_SUPABASE_URL=http://127.0.0.1:54321
+      export VITE_SUPABASE_PUBLISHABLE_KEY=<local publishable key>
+      pnpm dev
+      ```
+      Create a local staff user and a business with the README's "Adding a client" steps, using Studio at `http://127.0.0.1:54323`. Then check:
+      - log in, open the business, and edit everything: statuses, push, new period and round, reorder, notes, blueprint, sessions;
+      - reload, and the edits are still there;
+      - open it in a second browser and see the same data;
+      - Import a file, Switch business, Sign out.
+   2. **Settings:**
+      - Vercel → Environment Variables: `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` for Production and Preview.
+      - Supabase → Authentication: turn off "Allow new users to sign up".
+   3. **Push `supabase-schema`,** then repeat the checks on its Vercel preview.
+   4. **Before merging to `main` (production):** clients' current data is in their own browsers on the old site, so first:
+      - give every client a login (README "Adding a client");
+      - import each client's export file.
+
+      Then merge. After the merge, the old site's browser data is no longer used.
+2. **Escape user text** before it goes into `innerHTML` and `value="..."` attributes. A quote or `<` breaks the forms, and with shared data one user's text now reaches other users.
+3. **Per-business sign-up links**, so clients set their own password. This needs:
    - an `invites` table plus a `security definer` function that links the new login to the business;
    - a join page, and public sign-up turned back on;
    - email sending (SMTP, e.g. Resend or Postmark) set up in Supabase Auth, together with a "forgot password" flow.
-3. **An admin screen for staff:** create businesses and see or remove client links. Creating logins needs the service-role key, so it must happen server-side (an Edge Function), never in the browser.
-4. **Session Notes card** (`addNote()`): either save the notes (which needs a table) or remove the card.
-5. **`periods120[].oneyear`:** either show it on the period panel or stop collecting it.
-6. **Maybe live updates** (Supabase Realtime), so a change on one device shows up on another without reloading. Today the last write wins per row.
+4. **An admin screen for staff:** create businesses and see or remove client links. Creating logins needs the service-role key, so it must happen server-side (an Edge Function), never in the browser.
+5. **Session Notes card** (`addNote()`): either save the notes (which needs a table) or remove the card.
+6. **`periods120[].oneyear`:** either show it on the period panel or stop collecting it.
+7. **Maybe live updates** (Supabase Realtime), so a change on one device shows up on another without reloading. Today the last write wins per row.
