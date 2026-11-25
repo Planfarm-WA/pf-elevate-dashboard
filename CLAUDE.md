@@ -16,9 +16,10 @@ Commands:
 - `pnpm build`: type-checks, then bundles into `dist/` (gitignored).
 - `pnpm preview`: serves `dist/`.
 - `pnpm typecheck`: `tsc` with `tsconfig.json`. It checks types and writes no files.
-- `pnpm lint`: ESLint with typescript-eslint on `src/`. The config is in `eslint.config.js`.
+- `pnpm lint`: ESLint with typescript-eslint on `src/` and `tests/`. The config is in `eslint.config.js`.
+- `pnpm test`: Vitest smoke tests in `tests/dashboard.test.ts`. They run in jsdom, a browser imitation in Node.js. Each test loads the `index.html` body, runs `src/main.ts` the way the browser does, then drives the page like a user. `fire()` runs an element's real inline `on*="..."` code against `window`. The tests check the page and the JSON saved in `localStorage`. They don't render anything: layout, real drag-and-drop, the print dialog and sound still need a browser.
 
-There's no `vite.config.js`, because the defaults fit. There's no test suite. Opening `index.html` straight from disk (`file://`) no longer works, because module scripts need a server. The only external resource is Google Fonts (DM Sans, Fraunces).
+There's no `vite.config.js`, because the defaults fit. Opening `index.html` straight from disk (`file://`) no longer works, because module scripts need a server. The only external resource is Google Fonts (DM Sans, Fraunces).
 
 **TypeScript.** Vite strips types when it serves and bundles, but never checks them. Only `pnpm typecheck` and `pnpm build` do. `tsconfig.json` is `strict`. `src/main.ts` is the old untyped code and starts with `// @ts-nocheck`, so `tsc` skips it, and `no-undef` is switched back on for it in ESLint meanwhile. New modules are written fully typed, with no `@ts-nocheck`. Without `@ts-nocheck`, `main.ts` currently has about 440 strict-mode errors.
 

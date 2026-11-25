@@ -6,8 +6,9 @@ import { defineConfig } from "eslint/config";
 export default defineConfig([
   { ignores: ["node_modules/", "dist/", "supabase/"] },
   {
-    // The page's code: TypeScript ES modules, served and bundled by Vite.
-    files: ["src/**/*.ts"],
+    // The page's code (TypeScript ES modules, served and bundled by Vite) and its
+    // tests, which run in a browser-like jsdom environment.
+    files: ["src/**/*.ts", "tests/**/*.ts"],
     extends: [js.configs.recommended, tseslint.configs.recommended],
     languageOptions: {
       ecmaVersion: "latest",
