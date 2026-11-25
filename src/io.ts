@@ -2,7 +2,7 @@
 // have, so changes to the state shape must still import older exports.
 
 import type { Actions } from './actions.ts';
-import { stringifyIds } from './ids.ts';
+import { persistence, type ImportedData } from './persistence.ts';
 import { migrateOneYear, renderBlueprint } from './sections/blueprint.ts';
 import { renderIssues } from './sections/issues.ts';
 import { render120Periods } from './sections/periods120.ts';
@@ -10,7 +10,7 @@ import { render30 } from './sections/rounds30.ts';
 import { renderSessions } from './sections/sessions.ts';
 import { state } from './state.ts';
 import { updateStats } from './stats.ts';
-import { save, updateLastUpdatedDisplay } from './storage.ts';
+import { updateLastUpdatedDisplay } from './storage.ts';
 import type { ExportFile } from './types.ts';
 import { showToast } from './ui.ts';
 
@@ -28,27 +28,18 @@ function exportData(): void {
   showToast('Data exported successfully');
 }
 
-/** What an imported file may hold. Only `version` and `blueprint` are checked. */
-type ImportedData = Partial<ExportFile> & { lastUpdated?: string };
-
 /** The file input's change handler: after confirming, replace everything with the file's data. */
 function importData(event: Event): void {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0]; if (!file) return;
   const reader = new FileReader();
-  reader.onload = () => {
+  reader.onload = async () => {
     let data: ImportedData;
     try { data = JSON.parse(String(reader.result)) as ImportedData; } catch { alert('Could not read file.'); return; }
     if (!data.version || !data.blueprint) { alert('Not a valid Planfarm data file.'); return; }
     if (!confirm('This will replace all current data. Continue?')) return;
-    if (data.periods120) state.periods120 = data.periods120;
-    if (data.rounds) state.rounds = data.rounds;
-    if (data.sessions) state.sessions = data.sessions;
-    if (data.blueprint) state.blueprint = data.blueprint;
-    state.pendingPushes = data.pendingPushes || []; state.pendingPushes120 = data.pendingPushes120 || [];
-    if (data.lastUpdated) state.lastUpdated = data.lastUpdated;
-    stringifyIds(state);
-    save(); migrateOneYear(); renderBlueprint(); render120Periods(); render30(); renderSessions(); renderIssues(); updateStats(); updateLastUpdatedDisplay();
+    await persistence().importData(data);
+    migrateOneYear(); renderBlueprint(); render120Periods(); render30(); renderSessions(); renderIssues(); updateStats(); updateLastUpdatedDisplay();
     showToast('Data imported successfully');
   };
   reader.readAsText(file); input.value = '';

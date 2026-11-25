@@ -6,7 +6,7 @@ import { byId } from '../dom.ts';
 import { initDragList } from '../drag.ts';
 import { openEditModal } from '../edit-modal.ts';
 import { state } from '../state.ts';
-import { save } from '../storage.ts';
+import { save } from '../persistence.ts';
 import type { OneYearTarget } from '../types.ts';
 import { playBing } from '../ui.ts';
 import { renderIssues } from './issues.ts';

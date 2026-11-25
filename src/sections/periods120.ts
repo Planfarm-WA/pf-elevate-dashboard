@@ -8,7 +8,7 @@ import { newId } from '../ids.ts';
 import { openEditModal } from '../edit-modal.ts';
 import { state } from '../state.ts';
 import { updateStats } from '../stats.ts';
-import { save } from '../storage.ts';
+import { save } from '../persistence.ts';
 import { STATUSES, type Item, type Status } from '../types.ts';
 import { badgeFor, playBing, showToast } from '../ui.ts';
 

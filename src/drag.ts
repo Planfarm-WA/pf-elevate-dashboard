@@ -1,7 +1,7 @@
 // Drag-to-reorder for the priority/task tables and the 1-year targets list.
 
 import { state } from './state.ts';
-import { save } from './storage.ts';
+import { save } from './persistence.ts';
 
 /** The row or list item being dragged. */
 let dragSrc: HTMLElement | null = null;

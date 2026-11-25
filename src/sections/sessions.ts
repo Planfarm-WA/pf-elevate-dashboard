@@ -5,7 +5,7 @@ import { str, type Actions } from '../actions.ts';
 import { byId } from '../dom.ts';
 import { newId } from '../ids.ts';
 import { state } from '../state.ts';
-import { save } from '../storage.ts';
+import { save } from '../persistence.ts';
 import type { Session } from '../types.ts';
 import { showToast } from '../ui.ts';
 

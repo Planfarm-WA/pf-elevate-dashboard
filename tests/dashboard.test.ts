@@ -95,7 +95,8 @@ function pageBody(): string {
 /** Run startup exactly as the browser does, optionally with data already saved. */
 async function startApp(savedData?: Saved): Promise<void> {
   if (savedData) localStorage.setItem(STORAGE_KEY, JSON.stringify(savedData));
-  await import('../src/main.ts');
+  const { ready } = await import('../src/main.ts');
+  await ready;
 }
 
 function saved(): Saved {
