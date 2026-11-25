@@ -4,18 +4,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-The Planfarm Elevate coaching dashboard: a static page in three files:
-- `index.html` has the markup.
-- `css/styles.css` has all the styles. Many elements also carry inline `style="..."` attributes, in the markup and in JS template strings.
-- `js/app.js` has all the JavaScript. It's loaded with a plain `<script src>` near the end of `<body>` and runs immediately.
+The Planfarm Elevate coaching dashboard, built and served by Vite:
+- `index.html` has the markup. It's Vite's entry point and loads the two files below.
+- `src/styles.css` has all the styles. Many elements also carry inline `style="..."` attributes, in the markup and in JS template strings.
+- `src/main.ts` has all the code, as one TypeScript ES module (`<script type="module">`). It runs once the page has been parsed.
 
 It is a blank per-client template: the header `<h1>Client Name</h1>` and the "Who" suggestions (`<datalist id="who-suggestions">`) in `index.html` are placeholders edited for each client.
 
-**`js/app.js` is a classic script, not an ES module.** The inline `onclick`/`onchange`/... handlers, in `index.html` and in template strings in `app.js`, call its top-level functions by name, so those must stay global. Don't add `type="module"`, and don't wrap the file in a function, until the handlers are replaced with `addEventListener`. A classic script also keeps opening `index.html` straight from disk (`file://`) working.
+Commands:
+- `pnpm dev`: dev server at `http://localhost:5173`, reloads on save.
+- `pnpm build`: type-checks, then bundles into `dist/` (gitignored).
+- `pnpm preview`: serves `dist/`.
+- `pnpm typecheck`: `tsc` with `tsconfig.json`. It checks types and writes no files.
+- `pnpm lint`: ESLint with typescript-eslint on `src/`. The config is in `eslint.config.js`.
 
-The page has no build step or test suite. `pnpm lint` runs ESLint on `js/` (config in `eslint.config.js`). To run it, open `index.html` in a browser, or serve the folder (`python3 -m http.server`) and open it there. The only external resource is Google Fonts (DM Sans, Fraunces).
+There's no `vite.config.js`, because the defaults fit. There's no test suite. Opening `index.html` straight from disk (`file://`) no longer works, because module scripts need a server. The only external resource is Google Fonts (DM Sans, Fraunces).
 
-`package.json` (pnpm) holds dev tooling only: the Supabase CLI and ESLint. Run the Supabase CLI as `pnpm supabase <command>`, not bare `supabase`. The page itself uses no npm packages.
+**TypeScript.** Vite strips types when it serves and bundles, but never checks them. Only `pnpm typecheck` and `pnpm build` do. `tsconfig.json` is `strict`. `src/main.ts` is the old untyped code and starts with `// @ts-nocheck`, so `tsc` skips it, and `no-undef` is switched back on for it in ESLint meanwhile. New modules are written fully typed, with no `@ts-nocheck`. Without `@ts-nocheck`, `main.ts` currently has about 440 strict-mode errors.
+
+**TypeScript is pinned to `~6.0`.** typescript-eslint 8 only supports TypeScript `<6.1`. TypeScript 7, the native Go compiler, has no stable JavaScript API yet, and typescript-eslint issue #10940 tracks support for TS ≥ 7.1. Don't let `pnpm add`/`pnpm update` move `typescript` to 7 until that lands, or `pnpm lint` fails to start ("typescript-eslint does not support TS 7.0"). Upgrade the two together.
+
+**The `window` bridge.** The inline `onclick`/`oninput`/`onchange` handlers, in `index.html` and in template strings in `main.ts`, call functions by name. Module code isn't global, so `Object.assign(window, {...})` at the bottom of `main.ts` puts those 43 functions on `window`. **Any function called from an inline handler must be in the bridge**, or clicking throws `ReferenceError: … is not defined`. `pnpm lint` catches a function that's only called from a handler and is missing from the bridge, because it shows as unused. It can't catch one that's also called from JS (for example the `close…Modal` functions). Remove entries as handlers move to event delegation (see To-do).
+
+**`localStorage` is separate for each web address.** Data saved in a file-based copy, or at another address, doesn't appear at `localhost:5173`. Move it with Export/Import.
+
+`package.json` (pnpm) holds dev tooling only: Vite, TypeScript, ESLint (with typescript-eslint) and the Supabase CLI. Run the Supabase CLI as `pnpm supabase <command>`, not bare `supabase`. The page itself uses no npm packages yet.
 
 `supabase/migrations/` holds the planned database schema. **The app does not use Supabase yet.** It still reads and writes `localStorage` only.
 
@@ -38,7 +51,6 @@ The page has no build step or test suite. `pnpm lint` runs ESLint on `js/` (conf
 - **Not persisted or unused:**
   - The "Session Notes" card (`addNote()`) only writes to the page and is never saved.
   - `periods120[].oneyear` (targets entered in the New Period modal) is saved but never displayed.
-  - `WHO_OPTIONS` is unused.
 
 ## Export / import format
 
@@ -89,14 +101,21 @@ Roughly in order. The schema has been reviewed but not yet run on the real Supab
    - `when` → `by_when`; `current` → `is_current`; `date` → `session_date`.
    - `carriedFrom` → `carried_from`; `fromRound` / `fromPeriod` → `from_round` / `from_period`.
    - Array position → `sort_order`.
-3. **Switch the app to Supabase.**
-   - Add supabase-js and a login screen (staff or client).
+3. **Split `src/main.ts` into modules**: state, db, adapters (database rows ⇄ `state`), one module per section (blueprint, 120-day, 30-day, sessions, issues), io (export/import), print, ui (toast, modals).
+   - Type each module fully as it moves out: interfaces for `state` (`Period`, `Priority`, `Round`, `Task`, `Session`, `Blueprint`, …) and typed DOM lookups (`.value` needs `HTMLInputElement` and similar).
+   - Keep the `window` bridge working while moving functions.
+   - Remove `// @ts-nocheck` from `main.ts` once it's typed or empty.
+4. **Deploy to Vercel**, still on `localStorage`. Vercel detects Vite and serves `dist/`. Make sure its Build Command runs `pnpm build` (`tsc && vite build`), so type errors fail the deploy. If the build complains about the pnpm 12 version in `package.json`, set the environment variable `ENABLE_EXPERIMENTAL_COREPACK=1`.
+5. **Event delegation.** Replace the inline `on*="..."` handlers with `data-action` / `data-id` attributes and one `addEventListener` per container, one section at a time. Remove each function from the `window` bridge as its handlers move, and delete the bridge when it's empty. Once done, IDs travel as `data-id` strings, so UUIDs need no quoting.
+6. **Switch the app to Supabase.**
+   - Install supabase-js with pnpm. Put `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in `.env.local` (local stack) and in Vercel's environment variables (hosted project). Never use a `VITE_` variable for the `service_role` key.
+   - Generate database types with `pnpm supabase gen types typescript --local > src/database.types.ts`, and create the client as `createClient<Database>(...)` so queries are typed. Regenerate after every migration.
+   - Add a login screen (staff or client). In Supabase Auth's URL configuration, allow `http://localhost:5173` and the Vercel URLs.
    - Load one business's data.
    - Replace the whole-state `save()` with row-level inserts, updates and deletes.
-   - Quote the IDs in every inline `onclick="fn(${id})"`, because UUIDs aren't numbers.
+   - IDs become UUIDs. After event delegation (step 5) they're plain `data-id` strings. Any inline handler still left needs the ID quoted (`fn('${id}')`).
    - Keep Export/Import working as a backup.
-   - Consider moving `js/app.js` to ES modules at the same time, maybe with Vite. That means replacing the inline handlers with `addEventListener`, which this step rewrites anyway. Login also means serving over HTTP, so losing `file://` no longer matters.
-4. **Escape user text** before it goes into `innerHTML` and `value="..."` attributes.
-5. **Session Notes card** (`addNote()`): either save the notes (which needs a table) or remove the card.
-6. **`periods120[].oneyear`:** either show it on the period panel or stop collecting it.
-7. **Decide whether clients can edit or only view.** The current RLS lets them edit. Making them view-only means splitting the `"Business access"` policies into separate select and write policies.
+7. **Escape user text** before it goes into `innerHTML` and `value="..."` attributes.
+8. **Session Notes card** (`addNote()`): either save the notes (which needs a table) or remove the card.
+9. **`periods120[].oneyear`:** either show it on the period panel or stop collecting it.
+10. **Decide whether clients can edit or only view.** The current RLS lets them edit. Making them view-only means splitting the `"Business access"` policies into separate select and write policies.

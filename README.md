@@ -14,9 +14,16 @@ Priorities and tasks have a status (On Track / Off Track / Complete), an owner a
 
 ## Using it
 
-Open `index.html` in a web browser. Nothing needs installing. An internet connection is only needed for the fonts. Keep `index.html` together with its `css/` and `js/` folders, because the page loads its styles and code from them.
+The dashboard runs through [Vite](https://vite.dev), so it needs [Node.js](https://nodejs.org) and [pnpm](https://pnpm.io). From the repository folder:
 
-**Saving.** Changes save automatically in the browser you're using. They are not shared with anyone else, and don't move to another computer or browser by themselves. Clearing the browser's site data deletes them.
+```sh
+pnpm install   # first time only
+pnpm dev       # then open http://localhost:5173
+```
+
+`pnpm build` creates a `dist/` folder for hosting. Vercel is planned. Opening `index.html` straight from disk no longer works.
+
+**Saving.** Changes save automatically in the browser you're using. They are not shared with anyone else, and don't move to another computer or browser by themselves. Clearing the browser's site data deletes them. The browser also keeps data separately for each web address. Data from an older copy you opened as a file, or from a different address, won't appear here until you move it with Export and Import.
 
 **Backing up and moving data.**
 - **Export Data** downloads a `planfarm-elevate-dashboard-YYYY-MM-DD.json` file. Keep it as a backup, or use it to open the dashboard on another computer.
@@ -30,11 +37,15 @@ Open `index.html` in a web browser. Nothing needs installing. An internet connec
 
 ### Setting up for a new client
 
-1. Make a copy of `index.html` together with the `css/` and `js/` folders.
-2. In `index.html`, replace `Client Name` in the header with the client's name.
-3. In `index.html`, replace the placeholder names in the "Who" suggestions (`Person A`, `Person B`, …) near the end of the file.
+The plan is one hosted dashboard for every client business, with logins and data in Supabase (see below), so there won't be a copy per client.
 
-The browser stores data under a fixed name (`pf_elevate_blank1`, set in `js/app.js`). Copies served from the same website address share that storage, so give each client's copy a different storage name before hosting several together.
+Until that's live, a copy that opens straight from disk can be made from commit `4e83369`, the last file-based version:
+
+```sh
+mkdir ../client-copy && git archive 4e83369 index.html css js | tar -x -C ../client-copy
+```
+
+In the copy, replace `Client Name` in the header of `index.html` with the client's name, and the placeholder names in the "Who" suggestions (`Person A`, `Person B`, …) near the end of the file. The browser stores data under a fixed name (`pf_elevate_blank1`, set in `js/app.js`), so copies opened from the same place share it. Give each client's copy its own storage name if one browser is used for several clients.
 
 ## Supabase database (in progress)
 
@@ -92,9 +103,11 @@ Dates such as "By When" are stored as text, because the dashboard accepts entrie
 ## Repository layout
 
 ```
-index.html            The dashboard page (markup)
-css/styles.css        Styles for the page
-js/app.js             The dashboard's code (state, rendering, saving, import/export)
+index.html            The dashboard page (markup); Vite's entry point
+src/styles.css        Styles for the page
+src/main.ts           The dashboard's code (state, rendering, saving, import/export)
+tsconfig.json         TypeScript settings (`pnpm typecheck`)
+eslint.config.js      Lint rules (`pnpm lint`)
 supabase/migrations/  Database tables and access rules for Supabase (CLI migrations)
 CLAUDE.md             Notes for Claude Code when working on this repository
 ```

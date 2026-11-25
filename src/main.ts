@@ -1,4 +1,6 @@
-const WHO_OPTIONS = ['Person A','Person B','Advisor','Team'];
+// @ts-nocheck -- untyped code carried over from the single-file dashboard
+// Each function gets types when it moves into its own module (CLAUDE.md to-do,
+// "Split src/main.ts into modules"). Remove this line once the file is typed or empty.
 
 const state = {
   "periods120": [],
@@ -740,7 +742,7 @@ let dragSrc = null;
 function initDragTable(tbodyId,type,contextId) {
   const tbody = document.getElementById(tbodyId); if (!tbody) return;
   tbody.querySelectorAll('tr').forEach(row => {
-    row.addEventListener('dragstart',function(e){dragSrc=this;this.classList.add('dragging');e.dataTransfer.effectAllowed='move';});
+    row.addEventListener('dragstart',function(e){dragSrc=e.currentTarget;this.classList.add('dragging');e.dataTransfer.effectAllowed='move';});
     row.addEventListener('dragend',function(){this.classList.remove('dragging');tbody.querySelectorAll('tr').forEach(r=>r.classList.remove('drag-over'));});
     row.addEventListener('dragover',function(e){e.preventDefault();tbody.querySelectorAll('tr').forEach(r=>r.classList.remove('drag-over'));if(this!==dragSrc)this.classList.add('drag-over');e.dataTransfer.dropEffect='move';});
     row.addEventListener('drop',function(e){
@@ -757,7 +759,7 @@ function initDragTable(tbodyId,type,contextId) {
 function initDragList(listId,type) {
   const list = document.getElementById(listId); if (!list) return;
   list.querySelectorAll('li').forEach(item => {
-    item.addEventListener('dragstart',function(e){dragSrc=this;this.classList.add('dragging');e.dataTransfer.effectAllowed='move';});
+    item.addEventListener('dragstart',function(e){dragSrc=e.currentTarget;this.classList.add('dragging');e.dataTransfer.effectAllowed='move';});
     item.addEventListener('dragend',function(){this.classList.remove('dragging');list.querySelectorAll('li').forEach(i=>i.classList.remove('drag-over'));});
     item.addEventListener('dragover',function(e){e.preventDefault();list.querySelectorAll('li').forEach(i=>i.classList.remove('drag-over'));if(this!==dragSrc)this.classList.add('drag-over');});
     item.addEventListener('drop',function(e){
@@ -828,3 +830,17 @@ updateStats();
 // Nothing needed — playBing handles its own context
 migrateOneYear(); // ensure oneyear items are objects
 updateLastUpdatedDisplay();
+
+// Inline handlers (on*="..." in index.html and in the template strings above)
+// call these functions by name, but module code isn't global, so this puts
+// them on window. Remove each entry once its handler moves to event delegation.
+Object.assign(window, {
+  add120TaskRow, addNote, addOneYearTarget, addPriority120, addTask30, addTaskRow,
+  closeBpEditModal, closeEditModal, closeModal, closeNew120Modal, closeSessionEditModal,
+  createPeriod120, createRound, deleteOneYearTarget, deletePriority120, deleteSession,
+  deleteTask30, editBlueprint, editItem120, editItem30, editOneYearTarget, editSession,
+  exportData, importData, printAll, printPeriod120, printRound30, pushPriority120, pushTask,
+  remove120TaskRow, removeTaskRow, saveBpEdit, saveEdit, saveRoundNotes, saveSessionEdit,
+  setStatus120, setStatus30, showAddSessionModal, showNew120Modal, showNewRoundModal,
+  showSection, toggleOneYearDone, toggleThreeYearDone,
+});

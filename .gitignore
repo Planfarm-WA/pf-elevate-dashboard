@@ -1,4 +1,5 @@
 node_modules/
+dist/
 
 # Local secrets (the Supabase CLI reads supabase/.env)
 .env
