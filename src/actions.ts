@@ -1,5 +1,5 @@
-// Event delegation. Elements say what should happen in data attributes instead of inline
-// onclick="..." code, and one listener per event type (on the document) runs the matching action:
+// Event delegation. Elements say what should happen in data attributes instead of inline onclick
+// attributes holding code, and one listener per event type (on the document) runs the matching action:
 //
 //   <button data-click="setStatus120" data-period-id="1750000000000" data-item-id="1" data-status="on-track">
 //

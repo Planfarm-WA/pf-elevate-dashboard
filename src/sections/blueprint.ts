@@ -48,10 +48,10 @@ export function renderOneYearTargets(): void {
     const done = item.done || false;
     return `<li data-idx="${idx}" draggable="true" style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);${done ? 'opacity:0.6' : ''}">
       <span class="drag-handle" title="Drag to reorder" style="flex-shrink:0">⠿</span>
-      <button onclick="toggleOneYearDone(${idx})" title="${done ? 'Mark incomplete' : 'Mark complete'}" style="flex-shrink:0;width:22px;height:22px;border-radius:50%;border:2px solid ${done ? 'var(--lime)' : 'var(--teal-mid)'};background:${done ? 'var(--lime)' : 'white'};cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:all 0.15s;">${done ? '<span style="color:white;font-size:13px;line-height:1">✓</span>' : ''}</button>
+      <button data-click="toggleOneYearDone" data-idx="${idx}" title="${done ? 'Mark incomplete' : 'Mark complete'}" style="flex-shrink:0;width:22px;height:22px;border-radius:50%;border:2px solid ${done ? 'var(--lime)' : 'var(--teal-mid)'};background:${done ? 'var(--lime)' : 'white'};cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:all 0.15s;">${done ? '<span style="color:white;font-size:13px;line-height:1">✓</span>' : ''}</button>
       <span style="flex:1;font-size:14px;color:var(--grey-mid);line-height:1.5;${done ? 'text-decoration:line-through' : ''}">${item.text}</span>
-      <button class="btn btn-ghost btn-sm" onclick="editOneYearTarget(${idx})" style="flex-shrink:0">✏️</button>
-      <button class="btn btn-danger btn-sm" onclick="deleteOneYearTarget(${idx})" style="flex-shrink:0">🗑</button>
+      <button class="btn btn-ghost btn-sm" data-click="editOneYearTarget" data-idx="${idx}" style="flex-shrink:0">✏️</button>
+      <button class="btn btn-danger btn-sm" data-click="deleteOneYearTarget" data-idx="${idx}" style="flex-shrink:0">🗑</button>
     </li>`;
   }).join('')}</ul>`;
   initDragList('oneyear-list', 'oneyear');
@@ -117,7 +117,7 @@ export function renderThreeYearTargets(): void {
   el.innerHTML = '<ul style="list-style:none;padding:0;margin:0">' + lines.map((line, idx) => {
     const done = !!doneByIdx[idx];
     return `<li style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);${done ? 'opacity:0.6' : ''}">
-      <button onclick="toggleThreeYearDone(${idx})" title="${done ? 'Mark incomplete' : 'Mark complete'}" style="flex-shrink:0;margin-top:2px;width:22px;height:22px;border-radius:50%;border:2px solid ${done ? 'var(--lime)' : 'var(--teal-mid)'};background:${done ? 'var(--lime)' : 'white'};cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:all 0.15s;">${done ? '<span style="color:white;font-size:13px;line-height:1">✓</span>' : ''}</button>
+      <button data-click="toggleThreeYearDone" data-idx="${idx}" title="${done ? 'Mark incomplete' : 'Mark complete'}" style="flex-shrink:0;margin-top:2px;width:22px;height:22px;border-radius:50%;border:2px solid ${done ? 'var(--lime)' : 'var(--teal-mid)'};background:${done ? 'var(--lime)' : 'white'};cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:all 0.15s;">${done ? '<span style="color:white;font-size:13px;line-height:1">✓</span>' : ''}</button>
       <span style="flex:1;font-size:14px;color:var(--grey-mid);line-height:1.6;${done ? 'text-decoration:line-through' : ''}">${line}</span>
     </li>`;
   }).join('') + '</ul>';

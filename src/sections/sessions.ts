@@ -18,7 +18,7 @@ export function renderSessions(): void {
   tbody.innerHTML = '';
   state.sessions.forEach((s) => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td><strong>${s.date}</strong>${s.done ? '<span class="session-done-badge">✓ Done</span>' : ''}</td><td>${s.format}</td><td>${s.focus}</td><td style="color:var(--grey-light);font-size:12px">${s.notes}</td><td><div class="session-row-actions"><button class="btn btn-ghost btn-sm" onclick="editSession(${s.id})">✏️ Edit</button></div></td>`;
+    tr.innerHTML = `<td><strong>${s.date}</strong>${s.done ? '<span class="session-done-badge">✓ Done</span>' : ''}</td><td>${s.format}</td><td>${s.focus}</td><td style="color:var(--grey-light);font-size:12px">${s.notes}</td><td><div class="session-row-actions"><button class="btn btn-ghost btn-sm" data-click="editSession" data-session-id="${s.id}">✏️ Edit</button></div></td>`;
     tbody.appendChild(tr);
   });
 }

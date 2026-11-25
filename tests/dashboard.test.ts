@@ -1,12 +1,9 @@
 // @vitest-environment jsdom
 /**
  * Smoke tests for the dashboard. Each test loads the real page markup, runs src/main.ts the way
- * the browser does, then acts like a user: it runs the same inline handlers the buttons have,
- * types into the dialogs, and checks the page and the data saved in localStorage.
- *
- * jsdom can't run the inline on*="..." attributes against this test's window, so fire() runs an
- * element's handler code the way a browser would: `this` is the element, `event` is the event,
- * and names are looked up on window (the bridge at the bottom of src/main.ts).
+ * the browser does, then acts like a user: act() dispatches real DOM events on the buttons (found
+ * by their data-click / data-input / data-change attributes), it types into the dialogs, and it
+ * checks the page and the data saved in localStorage.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import indexHtml from '../index.html?raw';
@@ -120,18 +117,6 @@ function value(selector: string): string {
 
 function setValue(selector: string, text: string): void {
   ($(selector) as HTMLInputElement | HTMLTextAreaElement).value = text;
-}
-
-/** Run an element's inline on<type>="..." handler the way the browser does. */
-function fire(el: Element, type = 'click', event: Event = new Event(type)): void {
-  const code = el.getAttribute(`on${type}`);
-  if (!code) throw new Error(`No on${type} handler on ${el.outerHTML.slice(0, 80)}`);
-  new Function('event', code).call(el, event);
-}
-
-/** Find the element whose handler is exactly `call` (e.g. "createPeriod120()") and run it. */
-function run(call: string, type = 'click'): void {
-  fire($(`[on${type}="${call}"]`), type);
 }
 
 /** The attribute behind a dataset-style key: 'periodId' → 'data-period-id'. */
@@ -253,16 +238,10 @@ function actionNames(text: string): Set<string> {
   return new Set([...text.matchAll(/\bdata-(?:click|input|change)="([A-Za-z0-9_]+)"/g)].map((m) => m[1]));
 }
 
-/** Every function name called inside on*="..." attributes in `text`. */
-function handlerNames(text: string): Set<string> {
-  const names = new Set<string>();
-  for (const [, code] of text.matchAll(/\bon[a-z]+="([^"]*)"/g)) {
-    const withoutStrings = code.replace(/'[^']*'/g, "''");
-    for (const [, name] of withoutStrings.matchAll(/(?<![\w$.])([A-Za-z_$][\w$]*)\s*\(/g)) {
-      names.add(name);
-    }
-  }
-  return names;
+/** The page's markup and source as text: index.html plus every .ts file under src/. */
+function markupAndSources(): string[] {
+  const sources = import.meta.glob<string>('../src/**/*.ts', { query: '?raw', import: 'default', eager: true });
+  return [indexHtml, ...Object.values(sources)];
 }
 
 // ---- Setup ----
@@ -327,7 +306,7 @@ describe('startup', () => {
     expect($('#bp-oneyear-body').textContent).toContain('Old target');
     expect($('#last-updated-display').textContent).toContain('Last updated');
 
-    run('toggleOneYearDone(0)');
+    act('toggleOneYearDone', { idx: 0 });
     expect(saved().blueprint.oneyear).toEqual([{ text: 'Old target', done: true }]);
   });
 });
@@ -360,10 +339,10 @@ describe('blueprint', () => {
     editBlueprint('threeyear', 'New shed\n\nDebt free');
     expect($$('#bp-threeyear-body li')).toHaveLength(2);
 
-    run('toggleThreeYearDone(1)');
+    act('toggleThreeYearDone', { idx: 1 });
     expect(saved().blueprint.threeyearDone).toEqual({ 1: true });
-    run('toggleThreeYearDone(1)');
-    run('toggleThreeYearDone(0)');
+    act('toggleThreeYearDone', { idx: 1 });
+    act('toggleThreeYearDone', { idx: 0 });
     expect(saved().blueprint.threeyearDone).toEqual({ 0: true, 1: false });
 
     editBlueprint('threeyear', 'New shed\n\nDebt free\n\nSecond house');
@@ -378,16 +357,16 @@ describe('blueprint', () => {
     act('addOneYearTarget');
     saveEditDialog({ what: 'Hire a manager' });
 
-    run('editOneYearTarget(1)');
+    act('editOneYearTarget', { idx: 1 });
     expect(value('#ef-what')).toBe('Hire a manager');
     saveEditDialog({ what: 'Hire a farm manager' });
-    run('toggleOneYearDone(0)');
+    act('toggleOneYearDone', { idx: 0 });
     expect(saved().blueprint.oneyear).toEqual([
       { text: 'Fence the north paddock', done: true },
       { text: 'Hire a farm manager', done: false },
     ]);
 
-    run('deleteOneYearTarget(1)');
+    act('deleteOneYearTarget', { idx: 1 });
     expect(confirm).toHaveBeenCalledWith('Delete this target?');
     expect(saved().blueprint.oneyear).toEqual([{ text: 'Fence the north paddock', done: true }]);
   });
@@ -443,26 +422,26 @@ describe('120-day priorities', () => {
   it('adds, edits, toggles and deletes priorities', async () => {
     await startApp();
     const id = createPeriod('Period 1', 'Jan – Apr', [['Fix fences', 'Sam', 'Feb']]);
-    run(`addPriority120(${id})`);
+    act('addPriority120', { periodId: id });
     saveEditDialog({ what: 'Buy seed', who: 'Alex', when: 'Mar' });
-    run(`editItem120(${id},1)`);
+    act('editItem120', { periodId: id, itemId: 1 });
     expect(value('#ef-what')).toBe('Fix fences');
     saveEditDialog({ what: 'Fix all fences', who: 'Sam', when: 'Apr' });
     expect(priority(0, 1)).toMatchObject({ what: 'Fix all fences', who: 'Sam', when: 'Apr' });
     expect(priority(0, 2)).toMatchObject({ what: 'Buy seed', who: 'Alex', when: 'Mar', status: 'none' });
 
-    run(`setStatus120(${id},1,'on-track')`);
+    act('setStatus120', { periodId: id, itemId: 1, status: 'on-track' });
     expect(priority(0, 1).status).toBe('on-track');
     expect($('#stat-120-ontrack').textContent).toBe('1');
-    run(`setStatus120(${id},1,'on-track')`);
+    act('setStatus120', { periodId: id, itemId: 1, status: 'on-track' });
     expect(priority(0, 1).status).toBe('none');
 
-    run(`setStatus120(${id},2,'complete')`);
+    act('setStatus120', { periodId: id, itemId: 2, status: 'complete' });
     expect($('#stat-120-done').textContent).toBe('1');
     expect($(`#prog-120-text-${id}`).textContent).toBe('1 of 2 complete');
     expect($$(`#body-120-${id} tr`)[1].className).toBe('status-complete');
 
-    run(`deletePriority120(${id},2)`);
+    act('deletePriority120', { periodId: id, itemId: 2 });
     expect(saved().periods120[0].priorities.map((p) => p.id)).toEqual([1]);
   });
 
@@ -472,7 +451,7 @@ describe('120-day priorities', () => {
       ['Fix fences', 'Sam', 'Feb'],
       ['Buy seed', 'Alex', 'Mar'],
     ]);
-    run(`pushPriority120(${first},1)`);
+    act('pushPriority120', { periodId: first, itemId: 1 });
     expect(priority(0, 1).pushed).toBe(true);
     expect(saved().pendingPushes120).toEqual([{ what: 'Fix fences', who: 'Sam', when: 'Feb', fromPeriod: 'Period 1' }]);
     expect($(`#body-120-${first}`).textContent).toContain('Pushed ✓');
@@ -490,7 +469,7 @@ describe('120-day priorities', () => {
     ]);
     expect(saved().pendingPushes120).toEqual([]);
 
-    run(`pushPriority120(${first},2)`);
+    act('pushPriority120', { periodId: first, itemId: 2 });
     expect(saved().periods120[1].priorities.at(-1)).toEqual({
       id: 2,
       what: 'Buy seed',
@@ -536,25 +515,25 @@ describe('30-day to-dos', () => {
       ],
     });
 
-    run(`addTask30(${first})`);
+    act('addTask30', { roundId: first });
     saveEditDialog({ what: 'Fix pump', who: 'Alex', when: '20 May' });
-    run(`editItem30(${first},2)`);
+    act('editItem30', { roundId: first, taskId: 2 });
     saveEditDialog({ what: 'Book the vet', who: 'Sam', when: '15 May' });
     expect(task(0, 2)).toMatchObject({ what: 'Book the vet', who: 'Sam', when: '15 May' });
 
-    run(`setStatus30(${first},3,'complete')`);
+    act('setStatus30', { roundId: first, taskId: 3, status: 'complete' });
     expect($('#stat-30-done').textContent).toBe('1 / 3');
     expect($('#stat-30-ontrack').textContent).toBe('33%');
-    run(`setStatus30(${first},3,'complete')`);
+    act('setStatus30', { roundId: first, taskId: 3, status: 'complete' });
     expect(task(0, 3).status).toBe('none');
-    run(`deleteTask30(${first},3)`);
+    act('deleteTask30', { roundId: first, taskId: 3 });
     expect(saved().rounds[0].tasks.map((t) => t.id)).toEqual([1, 2]);
 
     setValue(`#notes-${first}`, 'Good session');
-    run(`saveRoundNotes(${first})`, 'input');
+    act('saveRoundNotes', { roundId: first }, 'input');
     expect(saved().rounds[0].notes).toBe('Good session');
 
-    run(`pushTask(${first},1)`);
+    act('pushTask', { roundId: first, taskId: 1 });
     expect(saved().pendingPushes).toEqual([{ what: 'Order fuel', who: 'Sam', when: '10 May', fromRound: 'Round 1' }]);
     act('showNewRoundModal');
     expect($('#pushed-tasks-notice').textContent).toContain('1 task will be carried over');
@@ -571,7 +550,7 @@ describe('30-day to-dos', () => {
     });
     expect(saved().pendingPushes).toEqual([]);
 
-    run(`pushTask(${first},2)`);
+    act('pushTask', { roundId: first, taskId: 2 });
     expect(task(1, 2)).toMatchObject({ what: 'Book the vet', carriedFrom: 'Round 1' });
 
     $(`#tab-${second}`).dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
@@ -605,7 +584,7 @@ describe('coaching sessions', () => {
     ]);
     expect(isOpen('#session-edit-overlay')).toBe(false);
 
-    run('editSession(1)');
+    act('editSession', { sessionId: 1 });
     expect($('#session-edit-title').textContent).toBe('Edit Session');
     expect(value('#se-focus')).toBe('Round 1 review');
     ($('#se-done') as HTMLInputElement).checked = true;
@@ -614,7 +593,7 @@ describe('coaching sessions', () => {
     expect(saved().sessions[0]).toMatchObject({ focus: 'Round 1 wrap-up', done: true });
     expect($('#sessions-tbody').textContent).toContain('✓ Done');
 
-    run('editSession(1)');
+    act('editSession', { sessionId: 1 });
     act('deleteSession');
     expect(saved().sessions).toEqual([]);
     expect(isOpen('#session-edit-overlay')).toBe(false);
@@ -730,9 +709,9 @@ describe('printing', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     await startApp();
     const id = createPeriod('Period 1', 'Jan', [['Fix fences'], ['Buy seed']]);
-    run(`setStatus120(${id},1,'complete')`);
+    act('setStatus120', { periodId: id, itemId: 1, status: 'complete' });
 
-    run(`printPeriod120(${id})`);
+    act('printPeriod120', { periodId: id });
     expect(print).toHaveBeenCalledTimes(1);
     expect(document.body.classList.contains('printing-single')).toBe(true);
     expect($('#priorities-120').classList.contains('print-target')).toBe(true);
@@ -749,7 +728,7 @@ describe('printing', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     await startApp();
     const id = createRound('Round 1', 'May', [['Order fuel']]);
-    run(`printRound30(${id})`);
+    act('printRound30', { roundId: id });
     expect($('#todos-30').classList.contains('print-target')).toBe(true);
     expect($(`#panel-${id}`).classList.contains('print-target')).toBe(true);
     vi.advanceTimersByTime(1000);
@@ -815,31 +794,20 @@ describe('drag and drop', () => {
 });
 
 describe('event delegation', () => {
-  it('has an action for every data-click / data-input / data-change in the markup', async () => {
-    const sources = import.meta.glob<string>('../src/**/*.ts', { query: '?raw', import: 'default', eager: true });
+  it('has an action for every data-click / data-input / data-change in the markup, and no unused ones', async () => {
     const used = new Set<string>();
-    for (const text of [indexHtml, ...Object.values(sources)]) {
+    for (const text of markupAndSources()) {
       for (const name of actionNames(text)) used.add(name);
     }
-    expect(used.size).toBeGreaterThan(15);
+    expect(used.size).toBeGreaterThan(40);
 
     const { actions } = await import('../src/main.ts');
     expect([...used].filter((name) => !(name in actions))).toEqual([]);
+    expect(Object.keys(actions).filter((name) => !used.has(name))).toEqual([]);
   });
-});
 
-describe('window bridge', () => {
-  it('has every function that an inline handler calls', async () => {
-    const sources = import.meta.glob<string>('../src/**/*.ts', { query: '?raw', import: 'default', eager: true });
-    const names = new Set<string>();
-    for (const text of [indexHtml, ...Object.values(sources)]) {
-      for (const name of handlerNames(text)) names.add(name);
-    }
-    expect(names.size).toBeGreaterThan(10);
-
-    await startApp();
-    const bridge = window as unknown as Record<string, unknown>;
-    const missing = [...names].filter((name) => typeof bridge[name] !== 'function');
-    expect(missing).toEqual([]);
+  it('has no inline on*="..." handlers left in the markup or templates', () => {
+    const inline = markupAndSources().flatMap((text) => [...text.matchAll(/\bon[a-z]+="[^"]*"/g)].map((m) => m[0]));
+    expect(inline).toEqual([]);
   });
 });
