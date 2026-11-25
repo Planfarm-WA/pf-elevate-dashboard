@@ -1,0 +1,10 @@
+{
+  // Type-checks the Node scripts (`pnpm typecheck` runs `tsc -p scripts`). Same settings as the
+  // root config, but with Node's types instead of the browser's Vite ones, so Node APIs such as
+  // `process` and `node:fs` stay out of the page's code.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["."]
+}

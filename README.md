@@ -97,9 +97,28 @@ The dashboard is moving from browser storage to Supabase, so data is shared and 
 
 Dates such as "By When" are stored as text, because the dashboard accepts entries like "TBC" or "Jun 2026". The export's `when` field is called `by_when` in the database.
 
+### Importing a client's export file
+
+A client's `planfarm-elevate-dashboard-YYYY-MM-DD.json` file can be loaded into their business in the database. First create the business, and add the client's login if they need one (see "Creating the tables" above). Then, from the repository folder:
+
+```sh
+export VITE_SUPABASE_URL=https://<project-ref>.supabase.co
+export VITE_SUPABASE_PUBLISHABLE_KEY=<publishable key>   # Supabase: Project Settings → API Keys
+export PF_STAFF_EMAIL=you@example.com                    # your staff login
+read -s PF_STAFF_PASSWORD && export PF_STAFF_PASSWORD    # type your password; it isn't shown
+
+pnpm import-dashboard "ABC Holdings" ~/Downloads/planfarm-elevate-dashboard-2026-05-01.json
+```
+
+- **Choosing the business.** Use its exact name, or its id if two businesses share a name.
+- **What the import does:**
+  - It **replaces** that business's dashboard with the file's contents, just like Import Data in the dashboard.
+  - It checks the whole file first. If something in the file is wrong, nothing is changed and the message says which field to fix.
+- **If it stops halfway** (for example the connection drops), the message says where. Run the same command again: it replaces everything, so a second run finishes the job.
+- **Who can import where.** Staff can import into any business. A client login can only import into its own business.
+
 ### Still to do
 
-- A way to load existing JSON export files into the database.
 - Changing the dashboard to read and save through Supabase instead of the browser.
 
 ## Repository layout
@@ -109,8 +128,10 @@ index.html            The dashboard page (markup); Vite's entry point
 src/styles.css        Styles for the page
 src/main.ts           The code's entry point: loads the data and draws every tab
 src/sections/         One module per tab (blueprint, issues, 120-day, 30-day, sessions)
-src/*.ts              Shared modules: data types and state, saving, dialogs, export/import, printing
-tests/                Smoke tests (`pnpm test`), run in a simulated browser
+src/*.ts              Shared modules: data types and state, saving, dialogs, export/import, printing,
+                      and the export → database import (adapters.ts, importer.ts)
+scripts/              Command-line tools run with Node (`pnpm import-dashboard`)
+tests/                Tests (`pnpm test`): smoke tests in a simulated browser, and the import mapping
 tsconfig.json         TypeScript settings (`pnpm typecheck`)
 eslint.config.js      Lint rules (`pnpm lint`)
 supabase/migrations/  Database tables and access rules for Supabase (CLI migrations)

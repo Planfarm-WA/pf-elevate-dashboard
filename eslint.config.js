@@ -17,4 +17,14 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    // Command-line scripts, run with Node through tsx (e.g. `pnpm import-dashboard`).
+    files: ["scripts/**/*.ts"],
+    extends: [js.configs.recommended, tseslint.configs.recommended],
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "module",
+      globals: globals.node,
+    },
+  },
 ]);

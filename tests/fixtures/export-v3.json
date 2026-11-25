@@ -1,0 +1,69 @@
+{
+  "version": 3,
+  "exportedAt": "2026-05-01T02:30:00.000Z",
+  "periods120": [
+    {
+      "id": 1714000000000,
+      "label": "Period 1",
+      "period": "Jan – Apr 2026",
+      "current": true,
+      "oneyear": ["Target A"],
+      "priorities": [
+        { "id": 1, "what": "Fix fences", "who": "Sam", "when": "Feb", "status": "complete", "pushed": false },
+        { "id": 2, "what": "Buy seed", "who": "Team", "when": "TBC", "status": "on-track", "pushed": true }
+      ]
+    },
+    {
+      "id": 1715000000000,
+      "label": "Period 2",
+      "period": "May – Aug 2026",
+      "current": true,
+      "priorities": [
+        { "id": 1, "what": "Buy seed", "who": "Team", "when": "TBC", "status": "none", "pushed": false, "carriedFrom": "Period 1" }
+      ]
+    }
+  ],
+  "rounds": [
+    {
+      "id": 1716000000000,
+      "label": "Round 1",
+      "period": "May",
+      "current": true,
+      "notes": "Good session",
+      "tasks": [
+        { "id": 1, "what": "Order fuel", "who": "Sam", "when": "10 May", "status": "off-track", "pushed": true },
+        { "id": 2, "what": "Book vet", "who": "Alex", "when": "15 May", "status": "on-track", "pushed": false }
+      ]
+    },
+    {
+      "id": 1717000000000,
+      "label": "Round 2",
+      "period": "June",
+      "current": false,
+      "tasks": [
+        { "id": 1, "what": "Order fuel", "who": "Sam", "when": "10 May", "pushed": false, "carriedFrom": "Round 1" }
+      ]
+    }
+  ],
+  "sessions": [
+    { "id": 1, "date": "1 May 2026", "format": "Teams", "focus": "Round 1 review", "notes": "Bring numbers", "done": true },
+    { "id": 2, "date": "1 June 2026", "format": "", "focus": "Round 2 review", "notes": "", "done": false }
+  ],
+  "blueprint": {
+    "tenyear": "Grow the farm\n\nBuy the neighbour block",
+    "threeyear": "  New shed  \n\n\n\nDebt free\n\n   \n\nSecond house",
+    "threeyearDone": { "1": true, "2": false },
+    "values": ["Honesty", "Care"],
+    "oneyear": ["Legacy target", { "text": "Hire a manager", "done": true }],
+    "purpose": "Feed people",
+    "issues": ["Water supply", "OPPORTUNITY: Solar grant", "OPPORTUNITY:Carbon credits"]
+  },
+  "pendingPushes": [
+    { "what": "Fix pump", "who": "Alex", "when": "June", "fromRound": "Round 2" },
+    { "what": "Spray weeds", "who": "Sam", "when": "June", "fromRound": "Round 2" },
+    { "what": "Check troughs", "who": "Team", "when": "TBC", "fromRound": "Round 2" }
+  ],
+  "pendingPushes120": [
+    { "what": "Sell cattle", "who": "Sam", "when": "Aug", "fromPeriod": "Period 2" }
+  ]
+}

@@ -24,7 +24,14 @@ src/
   io.ts             exportData(), importData()
   print.ts          printPeriod120(), printRound30(), printAll()
   sections/         one module per tab: blueprint.ts, issues.ts, periods120.ts, rounds30.ts, sessions.ts
+  database.types.ts generated from the schema (`pnpm gen:types`); never edit by hand
+  adapters.ts       parseExportFile() + exportToRows(): export JSON → table rows (pure, no DOM/network)
+  importer.ts       importDashboard(): writes those rows to Supabase through supabase-js
+scripts/
+  import-dashboard.ts  `pnpm import-dashboard`: loads an export file into one business (runs in Node)
 ```
+
+The page doesn't use `adapters.ts`, `importer.ts` or supabase-js yet. Only the import script does, until the Supabase switch.
 
 It is a blank per-client template: the header `<h1>Client Name</h1>` and the "Who" suggestions (`<datalist id="who-suggestions">`) in `index.html` are placeholders edited for each client.
 
@@ -32,9 +39,11 @@ Commands:
 - `pnpm dev`: dev server at `http://localhost:5173`, reloads on save.
 - `pnpm build`: type-checks, then bundles into `dist/` (gitignored).
 - `pnpm preview`: serves `dist/`.
-- `pnpm typecheck`: `tsc` with `tsconfig.json`. It checks types and writes no files.
-- `pnpm lint`: ESLint with typescript-eslint on `src/` and `tests/`. The config is in `eslint.config.js`.
-- `pnpm test`: Vitest smoke tests in `tests/dashboard.test.ts`. They run in jsdom, a browser imitation in Node.js. Each test loads the `index.html` body, runs `src/main.ts` the way the browser does, then drives the page like a user. `fire()` runs an element's real inline `on*="..."` code against `window`. The tests check the page and the JSON saved in `localStorage`. They don't render anything: layout, real drag-and-drop, the print dialog and sound still need a browser.
+- `pnpm typecheck`: `tsc` with `tsconfig.json` (`src/`, `tests/`, browser types), then `tsc -p scripts` (`scripts/` with Node types). It checks types and writes no files.
+- `pnpm lint`: ESLint with typescript-eslint on `src/`, `tests/` and `scripts/`. The config is in `eslint.config.js`.
+- `pnpm gen:types`: regenerates `src/database.types.ts` from the local Supabase schema. Run it after every migration, with the local stack up.
+- `pnpm import-dashboard "<business name or id>" <file.json>`: see "Importing export files" below.
+- `pnpm test`: Vitest. `tests/adapters.test.ts` checks the export → rows mapping against `tests/fixtures/export-v3.json`. The smoke tests are in `tests/dashboard.test.ts`. They run in jsdom, a browser imitation in Node.js. Each test loads the `index.html` body, runs `src/main.ts` the way the browser does, then drives the page like a user. `fire()` runs an element's real inline `on*="..."` code against `window`. The tests check the page and the JSON saved in `localStorage`. They don't render anything: layout, real drag-and-drop, the print dialog and sound still need a browser.
 
 There's no `vite.config.js`, because the defaults fit. Opening `index.html` straight from disk (`file://`) no longer works, because module scripts need a server. The only external resource is Google Fonts (DM Sans, Fraunces).
 
@@ -46,7 +55,7 @@ There's no `vite.config.js`, because the defaults fit. Opening `index.html` stra
 
 **`localStorage` is separate for each web address.** Data saved in a file-based copy, or at another address, doesn't appear at `localhost:5173`. Move it with Export/Import.
 
-`package.json` (pnpm) holds dev tooling only: Vite, TypeScript, ESLint (with typescript-eslint), Vitest with jsdom, and the Supabase CLI. Run the Supabase CLI as `pnpm supabase <command>`, not bare `supabase`. The page itself uses no npm packages yet.
+`package.json` (pnpm) has one runtime dependency, `@supabase/supabase-js`, for the Supabase switch. The rest is dev tooling: Vite, TypeScript, ESLint (with typescript-eslint), Vitest with jsdom, tsx (this Ubuntu Node build can't run `.ts` files itself), `@types/node`, and the Supabase CLI. Run the Supabase CLI as `pnpm supabase <command>`, not bare `supabase`. pnpm blocks dependencies' install scripts unless `pnpm-workspace.yaml` (`allowBuilds`) allows them. esbuild's is set to `false`, because tsx works without it. A new dependency with an install script makes `pnpm add` fail with `ERR_PNPM_IGNORED_BUILDS` until it's listed there.
 
 `supabase/migrations/` holds the planned database schema. **The app does not use Supabase yet.** It still reads and writes `localStorage` only.
 
@@ -93,7 +102,7 @@ Supabase CLI migrations. `000_initial_schema.sql` creates everything, wrapped in
   - `status` → `item_status` enum.
   - Free-text dates (`by_when`, `period`, `session_date`) stay `text`, because the app accepts "TBC".
   - A partial unique index on `is_current` allows one current period/round per business.
-- **Access (RLS).** `staff` rows can access every business. `clients` rows can access their own business(es). `anon` gets nothing. The checks are the `security definer` helpers `is_staff()` and `can_access_business(business_id)`. `priorities_120` and `tasks_30` have no `business_id` and resolve it through their parent period/round.
+- **Access (RLS).** `staff` rows can access every business. `clients` rows can read **and edit** their own business(es). Edit access was confirmed on 2026-11-25. View-only would mean splitting the `"Business access"` policies into separate select and write policies. `anon` gets nothing. The checks are the `security definer` helpers `is_staff()` and `can_access_business(business_id)`. `priorities_120` and `tasks_30` have no `business_id` and resolve it through their parent period/round.
 - **Adding a table:** enable RLS, add a `can_access_business` policy, add it to the `revoke all ... from anon, authenticated` list (Supabase's defaults grant both roles everything, including `TRUNCATE`, which bypasses RLS) and to the `grant select, insert, update, delete ... to authenticated` list, and add the `set_updated_at` trigger if the table has `updated_at`.
 
 To check schema changes without a Supabase project, run the script against a throwaway local Postgres. First create a stub of what Supabase provides:
@@ -111,30 +120,42 @@ grant execute on function auth.uid() to anon, authenticated;
 
 Then run each migration in order, e.g. `psql -v ON_ERROR_STOP=1 -f supabase/migrations/000_initial_schema.sql`. To test RLS as a user, use `set role authenticated; set request.jwt.claim.sub = '<user uuid>';`.
 
+### Importing export files (`pnpm import-dashboard`)
+
+`scripts/import-dashboard.ts` loads one export file into one business. The README has the commands for users.
+
+- **Sign-in and access.** It signs in with a staff login (`PF_STAFF_EMAIL` / `PF_STAFF_PASSWORD`) through supabase-js (`VITE_SUPABASE_URL` / `VITE_SUPABASE_PUBLISHABLE_KEY`, the same names the app will use). RLS applies: staff can import into any business, a client only into their own.
+- **Finding the business.** By exact name (it must match exactly one) or by id.
+- **Order of work.** `parseExportFile()` checks the whole file first, so a bad file changes nothing. `importDashboard()` then writes table by table.
+- **No transaction.** supabase-js sends each insert and delete as its own request, so a failure midway leaves a partial import. The script then says which table it stopped at. Re-running fixes it, because an import replaces data.
+- **What's replaced** matches the app's `importData()`: the blueprint and its lists always; `periods120`, `rounds` and `sessions` only if the file has them (otherwise kept); both queues always.
+- **Mapping rules** (`exportToRows()` in `src/adapters.ts`):
+  - The 3-year text is split on blank lines, trimmed, and empty items dropped *before* `threeyearDone` is indexed, matching `renderThreeYearTargets()`.
+  - The `OPPORTUNITY:` prefix becomes `issues.kind` and is removed from the text.
+  - `is_current` goes only on the *last* period or round marked current, because the unique index allows one per business.
+  - The queues get `created_at` 1 ms apart to keep their order.
+  - The JSON's numeric ids are dropped, and array position becomes `sort_order`.
+
 ## To-do
 
 Roughly in order. The schema has been reviewed but not yet run on the real Supabase project.
 
 1. **Run the schema on Supabase** with `pnpm supabase db push` and add the first staff user (snippet at the bottom of the initial migration). Adjust the tables after reviewing them in the table editor.
-2. **Import existing JSON exports** into the tables, e.g. a SQL function `import_dashboard(business_id uuid, data jsonb)`. The import has to map:
-   - `threeyear`: split on blank lines, with `done` taken from `threeyearDone[index]`.
-   - `issues`: an `OPPORTUNITY: ` prefix becomes `kind = 'opportunity'`.
-   - `oneyear`: items can be plain strings or `{text, done}`.
-   - `when` → `by_when`; `current` → `is_current`; `date` → `session_date`.
-   - `carriedFrom` → `carried_from`; `fromRound` / `fromPeriod` → `from_round` / `from_period`.
-   - Array position → `sort_order`.
-3. **Deploy to Vercel**, still on `localStorage`. Vercel detects Vite and serves `dist/`. Make sure its Build Command runs `pnpm build` (`tsc && vite build`), so type errors fail the deploy. If the build complains about the pnpm 12 version in `package.json`, set the environment variable `ENABLE_EXPERIMENTAL_COREPACK=1`.
-4. **Event delegation.** Replace the inline `on*="..."` handlers with `data-action` / `data-id` attributes and one `addEventListener` per container, one section at a time. Remove each function from the `window` bridge as its handlers move, and delete the bridge when it's empty. Once done, IDs travel as `data-id` strings, so UUIDs need no quoting.
-5. **Switch the app to Supabase.**
-   - Add `src/db.ts` for the Supabase reads and writes, and `src/adapters.ts` to convert database rows to and from the types in `src/types.ts`, so the render functions keep working on `state`. The smoke tests in `tests/` should keep passing, with Supabase stubbed out.
-   - Install supabase-js with pnpm. Put `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in `.env.local` (local stack) and in Vercel's environment variables (hosted project). Never use a `VITE_` variable for the `service_role` key.
-   - Generate database types with `pnpm supabase gen types typescript --local > src/database.types.ts`, and create the client as `createClient<Database>(...)` so queries are typed. Regenerate after every migration.
+2. **Check Vercel's build settings before the Vite code reaches `main`.**
+   - The site is deployed on Vercel from `main`, so merging to `main` publishes to production. The project was imported while `main` was still the single static `index.html`.
+   - The Vite code needs Framework Preset **Vite**: Build Command `pnpm build` (`tsc && vite build`, so type errors fail the deploy) and Output Directory `dist`. Otherwise production serves the raw `index.html` with `/src/main.ts` and loads blank.
+   - Check it on the preview deployment Vercel builds for each pushed branch before merging.
+   - If the build complains about the pnpm 12 version in `package.json`, set the environment variable `ENABLE_EXPERIMENTAL_COREPACK=1`.
+3. **Event delegation.** Replace the inline `on*="..."` handlers with `data-action` / `data-id` attributes and one `addEventListener` per container, one section at a time. Remove each function from the `window` bridge as its handlers move, and delete the bridge when it's empty. Once done, IDs travel as `data-id` strings, so UUIDs need no quoting.
+4. **Switch the app to Supabase.**
+   - Add `src/db.ts` for the Supabase reads and writes. `src/adapters.ts` already converts export JSON → rows; add the other direction (rows → the types in `src/types.ts`), so the render functions keep working on `state`. The smoke tests in `tests/` should keep passing, with Supabase stubbed out.
+   - supabase-js and `src/database.types.ts` are already in place. Create the client as `createClient<Database>(...)`. Put `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in `.env.local` (local stack) and in Vercel's environment variables (hosted project). Never use a `VITE_` variable for the `service_role` key.
+   - The Import button reuses `parseExportFile()` + `importDashboard()`, the same code as `pnpm import-dashboard`.
    - Add a login screen (staff or client). In Supabase Auth's URL configuration, allow `http://localhost:5173` and the Vercel URLs.
    - Load one business's data.
    - Replace the whole-state `save()` with row-level inserts, updates and deletes.
-   - IDs become UUIDs. After event delegation (step 4) they're plain `data-id` strings. Any inline handler still left needs the ID quoted (`fn('${id}')`).
+   - IDs become UUIDs. After event delegation (step 3) they're plain `data-id` strings. Any inline handler still left needs the ID quoted (`fn('${id}')`).
    - Keep Export/Import working as a backup.
-6. **Escape user text** before it goes into `innerHTML` and `value="..."` attributes.
-7. **Session Notes card** (`addNote()`): either save the notes (which needs a table) or remove the card.
-8. **`periods120[].oneyear`:** either show it on the period panel or stop collecting it.
-9. **Decide whether clients can edit or only view.** The current RLS lets them edit. Making them view-only means splitting the `"Business access"` policies into separate select and write policies.
+5. **Escape user text** before it goes into `innerHTML` and `value="..."` attributes.
+6. **Session Notes card** (`addNote()`): either save the notes (which needs a table) or remove the card.
+7. **`periods120[].oneyear`:** either show it on the period panel or stop collecting it.
