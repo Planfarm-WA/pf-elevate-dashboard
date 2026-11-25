@@ -14,7 +14,7 @@ import type { ExportFile } from './types.ts';
 import { showToast } from './ui.ts';
 
 /** Download the whole state as planfarm-elevate-dashboard-YYYY-MM-DD.json (export version 3). */
-export function exportData(): void {
+function exportData(): void {
   const exportable: ExportFile = { version: 3, exportedAt: new Date().toISOString(), periods120: state.periods120, rounds: state.rounds, sessions: state.sessions, blueprint: state.blueprint, pendingPushes: state.pendingPushes || [], pendingPushes120: state.pendingPushes120 || [] };
   const json = JSON.stringify(exportable, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
@@ -31,7 +31,7 @@ export function exportData(): void {
 type ImportedData = Partial<ExportFile> & { lastUpdated?: string };
 
 /** The file input's change handler: after confirming, replace everything with the file's data. */
-export function importData(event: Event): void {
+function importData(event: Event): void {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0]; if (!file) return;
   const reader = new FileReader();

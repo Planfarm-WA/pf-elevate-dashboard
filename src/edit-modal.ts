@@ -26,7 +26,7 @@ export function openEditModal(title: string, fieldsHtml: string, onSave: (values
 }
 
 /** The dialog's Save button. */
-export function saveEdit(): void {
+function saveEdit(): void {
   const what = (document.getElementById('ef-what') as HTMLInputElement | null)?.value.trim();
   const whoEl = document.getElementById('ef-who') as HTMLInputElement | null;
   const whenEl = document.getElementById('ef-when') as HTMLInputElement | null;

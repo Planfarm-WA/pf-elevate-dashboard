@@ -73,7 +73,7 @@ function switch120Period(id: number): void {
 }
 
 /** A status button. Clicking the active status sets it back to 'none'. */
-export function setStatus120(periodId: number, itemId: number, status: Status): void {
+function setStatus120(periodId: number, itemId: number, status: Status): void {
   const period = state.periods120.find((p) => p.id === periodId); if (!period) return;
   const p = period.priorities.find((x) => x.id === itemId); if (!p) return;
   const wasComplete = p.status !== 'complete';
@@ -83,7 +83,7 @@ export function setStatus120(periodId: number, itemId: number, status: Status): 
 }
 
 /** "Push →": copy the priority into the next period, or queue it until one is created. */
-export function pushPriority120(periodId: number, itemId: number): void {
+function pushPriority120(periodId: number, itemId: number): void {
   const period = state.periods120.find((p) => p.id === periodId); if (!period) return;
   const item = period.priorities.find((x) => x.id === itemId); if (!item) return;
   item.pushed = true;
@@ -100,7 +100,7 @@ export function pushPriority120(periodId: number, itemId: number): void {
   }
 }
 
-export function editItem120(periodId: number, itemId: number): void {
+function editItem120(periodId: number, itemId: number): void {
   const period = state.periods120.find((p) => p.id === periodId); if (!period) return;
   const p = period.priorities.find((x) => x.id === itemId); if (!p) return;
   openEditModal(
@@ -114,7 +114,7 @@ export function editItem120(periodId: number, itemId: number): void {
   );
 }
 
-export function addPriority120(periodId: number): void {
+function addPriority120(periodId: number): void {
   openEditModal(
     'Add 120-Day Priority',
     `<div class="edit-field"><label>What</label><textarea id="ef-what" style="min-height:80px" placeholder="Describe the priority action…"></textarea></div><div class="edit-field"><label>Who</label><input id="ef-who" placeholder="e.g. Newms, Ommers" list="who-suggestions"></div><div class="edit-field"><label>By When</label><input id="ef-when" placeholder="e.g. Jun 2026"></div>`,
@@ -126,7 +126,7 @@ export function addPriority120(periodId: number): void {
   );
 }
 
-export function deletePriority120(periodId: number, itemId: number): void {
+function deletePriority120(periodId: number, itemId: number): void {
   if (!confirm('Delete this priority?')) return;
   const period = state.periods120.find((p) => p.id === periodId);
   if (period) period.priorities = period.priorities.filter((x) => x.id !== itemId);
@@ -152,7 +152,7 @@ function renamePeriod120(periodId: number): void {
 /** Numbers the rows of the New Period dialog; reset each time it opens. */
 let taskRows120Counter = 0;
 
-export function showNew120Modal(): void {
+function showNew120Modal(): void {
   byId<HTMLInputElement>('new-120-label').value = ''; byId<HTMLInputElement>('new-120-period').value = ''; byId<HTMLTextAreaElement>('new-120-targets').value = ''; byId('task-rows-120').innerHTML = ''; taskRows120Counter = 0;
   const pending = state.pendingPushes120 || [];
   const notice = byId('pushed-120-notice');
@@ -165,7 +165,7 @@ export function closeNew120Modal(): void {
   byId('modal-120-overlay').style.display = 'none';
 }
 
-export function add120TaskRow(): void {
+function add120TaskRow(): void {
   taskRows120Counter++;
   const id = taskRows120Counter;
   const div = document.createElement('div');
@@ -174,12 +174,12 @@ export function add120TaskRow(): void {
   byId('task-rows-120').appendChild(div);
 }
 
-export function remove120TaskRow(id: number): void {
+function remove120TaskRow(id: number): void {
   document.getElementById(`trow120-${id}`)?.remove();
 }
 
 /** The dialog's Create button: queued pushes first, then the filled-in rows. */
-export function createPeriod120(): void {
+function createPeriod120(): void {
   const label = byId<HTMLInputElement>('new-120-label').value.trim();
   const period = byId<HTMLInputElement>('new-120-period').value.trim();
   const targetsRaw = byId<HTMLTextAreaElement>('new-120-targets').value.trim();

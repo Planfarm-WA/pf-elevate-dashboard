@@ -1,29 +1,17 @@
 // Entry point, loaded by index.html. Loads the saved data, wires up the dialogs, renders every
-// tab, and puts the functions that inline on*="..." handlers call on window.
+// tab, and installs the event delegation that runs the buttons' actions.
 
 import { installActions, mergeActions } from './actions.ts';
 import { byId } from './dom.ts';
-import { closeEditModal, editModalActions, saveEdit } from './edit-modal.ts';
-import { exportData, importData, ioActions } from './io.ts';
-import { navigationActions, showSection } from './navigation.ts';
-import { printActions, printAll, printPeriod120, printRound30 } from './print.ts';
-import {
-  addOneYearTarget, blueprintActions, closeBpEditModal, deleteOneYearTarget, editBlueprint, editOneYearTarget,
-  migrateOneYear, renderBlueprint, saveBpEdit, toggleOneYearDone, toggleThreeYearDone,
-} from './sections/blueprint.ts';
+import { closeEditModal, editModalActions } from './edit-modal.ts';
+import { ioActions } from './io.ts';
+import { navigationActions } from './navigation.ts';
+import { printActions } from './print.ts';
+import { blueprintActions, closeBpEditModal, migrateOneYear, renderBlueprint } from './sections/blueprint.ts';
 import { renderIssues } from './sections/issues.ts';
-import {
-  add120TaskRow, addPriority120, closeNew120Modal, createPeriod120, deletePriority120, editItem120,
-  periods120Actions, pushPriority120, remove120TaskRow, render120Periods, setStatus120, showNew120Modal,
-} from './sections/periods120.ts';
-import {
-  addTask30, addTaskRow, closeModal, createRound, deleteTask30, editItem30, pushTask, removeTaskRow,
-  render30, rounds30Actions, saveRoundNotes, setStatus30, showNewRoundModal,
-} from './sections/rounds30.ts';
-import {
-  addNote, closeSessionEditModal, deleteSession, editSession, renderSessions, saveSessionEdit,
-  sessionsActions, showAddSessionModal,
-} from './sections/sessions.ts';
+import { closeNew120Modal, periods120Actions, render120Periods } from './sections/periods120.ts';
+import { closeModal, render30, rounds30Actions } from './sections/rounds30.ts';
+import { closeSessionEditModal, renderSessions, sessionsActions } from './sections/sessions.ts';
 import { updateStats } from './stats.ts';
 import { loadSaved, updateLastUpdatedDisplay } from './storage.ts';
 
@@ -50,25 +38,11 @@ updateStats();
 migrateOneYear(); // make sure 1-year targets are {text, done} objects
 updateLastUpdatedDisplay();
 
-// Buttons and inputs name their action in data-click / data-input / data-change attributes;
-// one document listener per event type runs it (src/actions.ts). Exported for the tests.
+// Buttons and inputs name their action in data-click / data-input / data-change attributes, and
+// one document listener per event type runs it (src/actions.ts). Each module exports its actions;
+// a name registered twice throws here. Exported so the tests can check every action is used.
 export const actions = mergeActions(
   editModalActions, ioActions, navigationActions, printActions,
   blueprintActions, periods120Actions, rounds30Actions, sessionsActions,
 );
 installActions(actions);
-
-// Inline handlers (on*="..." in index.html and in the sections' template strings) call these
-// functions by name, but module code isn't global, so this puts them on window. The bridge test
-// in tests/dashboard.test.ts fails if one is missing. Remove each entry once its handler moves to
-// event delegation (CLAUDE.md to-do).
-Object.assign(window, {
-  add120TaskRow, addNote, addOneYearTarget, addPriority120, addTask30, addTaskRow,
-  closeBpEditModal, closeEditModal, closeModal, closeNew120Modal, closeSessionEditModal,
-  createPeriod120, createRound, deleteOneYearTarget, deletePriority120, deleteSession,
-  deleteTask30, editBlueprint, editItem120, editItem30, editOneYearTarget, editSession,
-  exportData, importData, printAll, printPeriod120, printRound30, pushPriority120, pushTask,
-  remove120TaskRow, removeTaskRow, saveBpEdit, saveEdit, saveRoundNotes, saveSessionEdit,
-  setStatus120, setStatus30, showAddSessionModal, showNew120Modal, showNewRoundModal,
-  showSection, toggleOneYearDone, toggleThreeYearDone,
-});

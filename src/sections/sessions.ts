@@ -23,7 +23,7 @@ export function renderSessions(): void {
   });
 }
 
-export function showAddSessionModal(): void {
+function showAddSessionModal(): void {
   isNewSession = true;
   currentSessionId = null;
   byId('session-edit-title').textContent = 'Add New Session';
@@ -32,7 +32,7 @@ export function showAddSessionModal(): void {
   byId('session-edit-overlay').classList.add('open');
 }
 
-export function editSession(id: number): void {
+function editSession(id: number): void {
   const s = state.sessions.find((x) => x.id === id);
   if (!s) return;
   isNewSession = false;
@@ -47,7 +47,7 @@ function sessionFormHTML(s: Omit<Session, 'id'>): string {
   return `<div class="edit-field"><label>Date</label><input id="se-date" type="text" value="${s.date || ''}" placeholder="e.g. 1 May 2026"></div><div class="edit-field"><label>Format</label><input id="se-format" type="text" value="${s.format || ''}" placeholder="e.g. In-person, Teams, TBC"></div><div class="edit-field"><label>Focus / Topic</label><input id="se-focus" type="text" value="${s.focus || ''}" placeholder="e.g. 30-Day Round 2 Review"></div><div class="edit-field"><label>Notes</label><textarea id="se-notes" style="min-height:80px">${s.notes || ''}</textarea></div><div class="edit-field"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:13px;font-weight:500;"><input type="checkbox" id="se-done" ${s.done ? 'checked' : ''} style="width:auto;accent-color:var(--lime)"> Mark as completed</label></div>`;
 }
 
-export function saveSessionEdit(): void {
+function saveSessionEdit(): void {
   const date = byId<HTMLInputElement>('se-date').value.trim();
   const format = byId<HTMLInputElement>('se-format').value.trim();
   const focus = byId<HTMLInputElement>('se-focus').value.trim();
@@ -67,7 +67,7 @@ export function saveSessionEdit(): void {
   showToast(isNewSession ? 'Session added ✓' : 'Session updated ✓');
 }
 
-export function deleteSession(): void {
+function deleteSession(): void {
   if (!confirm('Delete this session?')) return;
   state.sessions = state.sessions.filter((s) => s.id !== currentSessionId);
   save();
@@ -83,7 +83,7 @@ export function closeSessionEditModal(): void {
 }
 
 /** The Session Notes card. The note is only added to the page; it isn't saved. */
-export function addNote(): void {
+function addNote(): void {
   const date = byId<HTMLInputElement>('note-date').value.trim();
   const who = byId<HTMLInputElement>('note-who').value.trim();
   const text = byId<HTMLTextAreaElement>('note-text').value.trim();

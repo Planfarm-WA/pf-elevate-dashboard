@@ -14,7 +14,7 @@ export const SECTION_IDS = ['blueprint', 'priorities-120', 'todos-30', 'issues-o
 export type SectionId = (typeof SECTION_IDS)[number];
 
 /** Show a tab's section and re-render it. `el` is the clicked nav tab. */
-export function showSection(id: SectionId, el?: HTMLElement | null): void {
+function showSection(id: SectionId, el?: HTMLElement | null): void {
   document.querySelectorAll('.section').forEach((s) => s.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach((t) => t.classList.remove('active'));
   byId(id).classList.add('active');

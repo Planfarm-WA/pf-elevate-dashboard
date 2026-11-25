@@ -65,7 +65,7 @@ export function renderRoundTasks(roundId: number): void {
 }
 
 /** A status button. Clicking the active status sets it back to 'none'. */
-export function setStatus30(roundId: number, taskId: number, status: Status): void {
+function setStatus30(roundId: number, taskId: number, status: Status): void {
   const round = state.rounds.find((r) => r.id === roundId); if (!round) return;
   const t = round.tasks.find((x) => x.id === taskId);
   if (t) { const wasComplete = t.status !== 'complete'; t.status = t.status === status ? 'none' : status; if (status === 'complete' && wasComplete && t.status === 'complete') playBing(); save(); renderRoundTasks(roundId); }
@@ -80,13 +80,13 @@ function switchRound(id: number): void {
 }
 
 /** The round's coaching notes box; saves on every keystroke. */
-export function saveRoundNotes(roundId: number): void {
+function saveRoundNotes(roundId: number): void {
   const round = state.rounds.find((r) => r.id === roundId);
   if (round) { round.notes = byId<HTMLTextAreaElement>(`notes-${roundId}`).value; save(); }
 }
 
 /** "Push →": copy the task into the next round, or queue it until one is created. */
-export function pushTask(roundId: number, taskId: number): void {
+function pushTask(roundId: number, taskId: number): void {
   const round = state.rounds.find((r) => r.id === roundId); if (!round) return;
   const t = round.tasks.find((x) => x.id === taskId); if (!t) return;
   t.pushed = true;
@@ -103,7 +103,7 @@ export function pushTask(roundId: number, taskId: number): void {
   }
 }
 
-export function addTask30(roundId: number): void {
+function addTask30(roundId: number): void {
   openEditModal(
     'Add Task',
     `<div class="edit-field"><label>What</label><textarea id="ef-what" style="min-height:80px" placeholder="Describe the task…"></textarea></div><div class="edit-field"><label>Who</label><input id="ef-who" placeholder="e.g. Newms, Ommers" list="who-suggestions"></div><div class="edit-field"><label>By When</label><input id="ef-when" placeholder="e.g. 31 May 2026"></div>`,
@@ -115,14 +115,14 @@ export function addTask30(roundId: number): void {
   );
 }
 
-export function deleteTask30(roundId: number, taskId: number): void {
+function deleteTask30(roundId: number, taskId: number): void {
   if (!confirm('Delete this task?')) return;
   const round = state.rounds.find((r) => r.id === roundId);
   if (round) round.tasks = round.tasks.filter((t) => t.id !== taskId);
   save(); renderRoundTasks(roundId);
 }
 
-export function editItem30(roundId: number, taskId: number): void {
+function editItem30(roundId: number, taskId: number): void {
   const round = state.rounds.find((r) => r.id === roundId); if (!round) return;
   const t = round.tasks.find((x) => x.id === taskId); if (!t) return;
   openEditModal(
@@ -157,7 +157,7 @@ let tempTaskRows: number[] = [];
 /** Numbers the rows of the New Round dialog. Unlike the New Period dialog, it never resets. */
 let taskRowCounter = 0;
 
-export function showNewRoundModal(): void {
+function showNewRoundModal(): void {
   tempTaskRows = []; byId<HTMLInputElement>('new-round-label').value = ''; byId<HTMLInputElement>('new-round-period').value = ''; byId('task-rows').innerHTML = '';
   const pending = state.pendingPushes || [];
   const notice = byId('pushed-tasks-notice');
@@ -171,7 +171,7 @@ export function closeModal(): void {
   byId('modal-overlay').style.display = 'none';
 }
 
-export function addTaskRow(): void {
+function addTaskRow(): void {
   taskRowCounter++;
   const id = taskRowCounter;
   const div = document.createElement('div');
@@ -181,13 +181,13 @@ export function addTaskRow(): void {
   tempTaskRows.push(id);
 }
 
-export function removeTaskRow(id: number): void {
+function removeTaskRow(id: number): void {
   document.getElementById(`trow-${id}`)?.remove();
   tempTaskRows = tempTaskRows.filter((x) => x !== id);
 }
 
 /** The dialog's Create button: queued pushes first, then the filled-in rows. */
-export function createRound(): void {
+function createRound(): void {
   const label = byId<HTMLInputElement>('new-round-label').value.trim();
   const period = byId<HTMLInputElement>('new-round-period').value.trim();
   if (!label) { alert('Please enter a round label.'); return; }

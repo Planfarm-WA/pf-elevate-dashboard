@@ -29,7 +29,7 @@ function cleanupPrintStatusSpans(): void {
   document.querySelectorAll('.print-status').forEach((el) => el.remove());
 }
 
-export function printPeriod120(periodId: number): void {
+function printPeriod120(periodId: number): void {
   renderPeriodPriorities(periodId); addPrintStatusSpans();
   document.querySelectorAll('.section').forEach((s) => s.classList.remove('print-target'));
   document.querySelectorAll('.round-panel').forEach((p) => p.classList.remove('print-target'));
@@ -40,7 +40,7 @@ export function printPeriod120(periodId: number): void {
   setTimeout(() => { document.body.classList.remove('printing-single'); document.querySelectorAll('.print-target').forEach((el) => el.classList.remove('print-target')); cleanupPrintStatusSpans(); }, 1000);
 }
 
-export function printRound30(roundId: number): void {
+function printRound30(roundId: number): void {
   renderRoundTasks(roundId); addPrintStatusSpans();
   document.querySelectorAll('.section').forEach((s) => s.classList.remove('print-target'));
   document.querySelectorAll('.round-panel').forEach((p) => p.classList.remove('print-target'));
@@ -51,7 +51,7 @@ export function printRound30(roundId: number): void {
   setTimeout(() => { document.body.classList.remove('printing-single'); document.querySelectorAll('.print-target').forEach((el) => el.classList.remove('print-target')); cleanupPrintStatusSpans(); }, 1000);
 }
 
-export function printAll(): void {
+function printAll(): void {
   renderBlueprint(); render120Periods(); render30(); renderSessions(); renderIssues(); updateStats();
   addPrintStatusSpans(); window.print();
   setTimeout(() => cleanupPrintStatusSpans(), 1000);

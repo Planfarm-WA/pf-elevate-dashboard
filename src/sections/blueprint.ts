@@ -38,7 +38,7 @@ export function migrateOneYear(): void {
 
 // ---- 1-year targets ----
 
-export function renderOneYearTargets(): void {
+function renderOneYearTargets(): void {
   migrateOneYear();
   const oneEl = document.getElementById('bp-oneyear-body');
   if (!oneEl) return;
@@ -57,7 +57,7 @@ export function renderOneYearTargets(): void {
   initDragList('oneyear-list', 'oneyear');
 }
 
-export function toggleOneYearDone(idx: number): void {
+function toggleOneYearDone(idx: number): void {
   migrateOneYear();
   const item = state.blueprint.oneyear[idx];
   if (!item) return;
@@ -68,7 +68,7 @@ export function toggleOneYearDone(idx: number): void {
   renderOneYearTargets();
 }
 
-export function addOneYearTarget(): void {
+function addOneYearTarget(): void {
   openEditModal(
     'Add 1-Year Target',
     `<div class="edit-field"><label>Target</label><textarea id="ef-what" style="min-height:80px" placeholder="Describe the target…"></textarea></div>`,
@@ -81,7 +81,7 @@ export function addOneYearTarget(): void {
   );
 }
 
-export function editOneYearTarget(idx: number): void {
+function editOneYearTarget(idx: number): void {
   migrateOneYear();
   const item = state.blueprint.oneyear[idx];
   openEditModal(
@@ -97,7 +97,7 @@ export function editOneYearTarget(idx: number): void {
   );
 }
 
-export function deleteOneYearTarget(idx: number): void {
+function deleteOneYearTarget(idx: number): void {
   if (!confirm('Delete this target?')) return;
   state.blueprint.oneyear.splice(idx, 1);
   save();
@@ -106,7 +106,7 @@ export function deleteOneYearTarget(idx: number): void {
 
 // ---- 3-year picture ----
 
-export function renderThreeYearTargets(): void {
+function renderThreeYearTargets(): void {
   const el = document.getElementById('bp-threeyear-body');
   if (!el) return;
   const text = state.blueprint.threeyear || '';
@@ -123,7 +123,7 @@ export function renderThreeYearTargets(): void {
   }).join('') + '</ul>';
 }
 
-export function toggleThreeYearDone(idx: number): void {
+function toggleThreeYearDone(idx: number): void {
   if (!state.blueprint.threeyearDone) state.blueprint.threeyearDone = {};
   const doneByIdx = state.blueprint.threeyearDone;
   const wasDone = !!doneByIdx[idx];
@@ -138,7 +138,7 @@ export function toggleThreeYearDone(idx: number): void {
 /** The part of the blueprint the dialog is editing. */
 let currentBpSection: BpSection | null = null;
 
-export function editBlueprint(section: BpSection): void {
+function editBlueprint(section: BpSection): void {
   currentBpSection = section;
   const bp = state.blueprint;
   const titles: Record<BpSection, string> = { tenyear: '10-Year Direction', threeyear: '3-Year Picture', values: 'Core Values', purpose: 'Our Purpose', issues: 'Issues & Opportunities' };
@@ -154,7 +154,7 @@ export function editBlueprint(section: BpSection): void {
   byId('bp-edit-overlay').classList.add('open');
 }
 
-export function saveBpEdit(): void {
+function saveBpEdit(): void {
   const val = byId<HTMLTextAreaElement>('bp-edit-val').value.trim();
   const bp = state.blueprint;
   if (isTextSection(currentBpSection)) { bp[currentBpSection] = val; if (currentBpSection === 'threeyear') bp.threeyearDone = {}; }

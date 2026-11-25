@@ -11,8 +11,9 @@ The Planfarm Elevate coaching dashboard, built and served by Vite:
 
 ```
 src/
-  main.ts           startup: loadSaved → backdrop click listeners → render every tab → window bridge
-  types.ts          the saved data: State, Period120, Round30, Item, Session, Blueprint, ExportFile, …
+  main.ts           startup: loadSaved → backdrop click listeners → render every tab → install actions
+  actions.ts        event delegation: installActions(), mergeActions(), num(), oneOf()
+  types.ts          the saved data: State, Period120, Round30, Item, Session, Blueprint, ExportFile, …, plus STATUSES
   state.ts          `state`, the single shared object
   storage.ts        save(), loadSaved(), updateLastUpdatedDisplay(); localStorage key pf_elevate_blank1
   dom.ts            byId<T>(): typed getElementById that throws "Missing element #id"
@@ -43,7 +44,7 @@ Commands:
 - `pnpm lint`: ESLint with typescript-eslint on `src/`, `tests/` and `scripts/`. The config is in `eslint.config.js`.
 - `pnpm gen:types`: regenerates `src/database.types.ts` from the local Supabase schema. Run it after every migration, with the local stack up.
 - `pnpm import-dashboard "<business name or id>" <file.json>`: see "Importing export files" below.
-- `pnpm test`: Vitest. `tests/adapters.test.ts` checks the export → rows mapping against `tests/fixtures/export-v3.json`. The smoke tests are in `tests/dashboard.test.ts`. They run in jsdom, a browser imitation in Node.js. Each test loads the `index.html` body, runs `src/main.ts` the way the browser does, then drives the page like a user. `fire()` runs an element's real inline `on*="..."` code against `window`. The tests check the page and the JSON saved in `localStorage`. They don't render anything: layout, real drag-and-drop, the print dialog and sound still need a browser.
+- `pnpm test`: Vitest. `tests/adapters.test.ts` checks the export → rows mapping against `tests/fixtures/export-v3.json`. The smoke tests are in `tests/dashboard.test.ts`. They run in jsdom, a browser imitation in Node.js. Each test loads the `index.html` body, runs `src/main.ts` the way the browser does, then drives the page like a user. `act()` finds an element by its `data-click`/`data-input`/`data-change` attribute and dispatches a real DOM event, which goes through the same delegated listener as in the browser. The tests check the page and the JSON saved in `localStorage`. They don't render anything: layout, real drag-and-drop, the print dialog and sound still need a browser.
 
 There's no `vite.config.js`, because the defaults fit. Opening `index.html` straight from disk (`file://`) no longer works, because module scripts need a server. The only external resource is Google Fonts (DM Sans, Fraunces).
 
@@ -51,7 +52,24 @@ There's no `vite.config.js`, because the defaults fit. Opening `index.html` stra
 
 **TypeScript is pinned to `~6.0`.** typescript-eslint 8 only supports TypeScript `<6.1`. TypeScript 7, the native Go compiler, has no stable JavaScript API yet, and typescript-eslint issue #10940 tracks support for TS ≥ 7.1. Don't let `pnpm add`/`pnpm update` move `typescript` to 7 until that lands, or `pnpm lint` fails to start ("typescript-eslint does not support TS 7.0"). Upgrade the two together.
 
-**The `window` bridge.** The inline `onclick`/`oninput`/`onchange` handlers, in `index.html` and in the sections' template strings, call functions by name. Module code isn't global, so `Object.assign(window, {...})` at the bottom of `main.ts` puts those 43 functions on `window`. **Any function called from an inline handler must be exported from its module and listed in the bridge**, or clicking throws `ReferenceError: … is not defined`. The "window bridge" test in `pnpm test` fails if one is missing. Lint can't catch it, because exported functions never count as unused. Remove entries as handlers move to event delegation (see To-do).
+**Event handling (delegation).** No element has inline JavaScript. Elements name an action in an attribute, and pass the action's arguments in other `data-*` attributes:
+
+```html
+<button data-click="setStatus120" data-period-id="${periodId}" data-item-id="${p.id}" data-status="on-track">
+```
+
+- `data-click`, `data-input` or `data-change` says which event triggers the action. A click on the notes box never runs its input action.
+- `installActions()` (`src/actions.ts`) adds **one listener per event type on `document`**. It finds `event.target.closest('[data-click]')` (and so on) and runs the named action with `(el, event)`.
+- Each module exports an actions object next to the markup that uses it, for example `periods120Actions`. `main.ts` merges them with `mergeActions()`, which throws on a duplicate name.
+- Installing twice only swaps the actions, so the tests (which re-run startup) and Vite reloads never run an action twice.
+
+**To add a button:**
+1. Give the element `data-click="myAction"`, plus `data-*` attributes for its arguments.
+2. Add `myAction: (el) => myAction(num(el, 'periodId'))` to that module's actions. `num()` and `oneOf()` check the attribute and throw if it's wrong.
+
+The "event delegation" tests fail if an attribute names an unregistered action, if an action is never used, or if an inline `on*="…"` attribute comes back.
+
+The period and round tabs (`tab.onclick`/`tab.ondblclick`), drag-and-drop and the dialog backdrops attach their listeners in JS, which is fine because nothing is global.
 
 **`localStorage` is separate for each web address.** Data saved in a file-based copy, or at another address, doesn't appear at `localhost:5173`. Move it with Export/Import.
 
@@ -64,7 +82,7 @@ There's no `vite.config.js`, because the defaults fit. Opening `index.html` stra
 - **One shared `state` object** (`src/state.ts`: `periods120`, `rounds`, `sessions`, `blueprint`, `pendingPushes`, `pendingPushes120`, `lastUpdated`). Modules import it and change its properties. An imported binding can't be reassigned, but its properties can. Every change follows the same pattern: change `state`, call `save()` (which writes the whole object to `localStorage` key `pf_elevate_blank1` and stamps `lastUpdated`), then call the render function for that section.
 - **Render functions rebuild `innerHTML` from `state`:** `renderBlueprint`, `renderOneYearTargets`, `renderThreeYearTargets`, `render120Periods` / `renderPeriodPriorities`, `render30` / `renderRoundTasks`, `renderSessions`, `renderIssues`. `showSection()` re-renders a tab when it is opened.
 - **Variables used by only one area stay private to its module**, for example `currentSessionId` in `sessions.ts`, `currentBpSection` in `blueprint.ts`, and `dragSrc` in `drag.ts`.
-- **Event handling is inline `onclick="fn(${id})"` in template strings.** IDs are interpolated **unquoted**, so they must stay numeric. Periods and rounds use `Date.now()`; priorities and tasks use `Math.max(...ids)+1` within their parent. Moving to Supabase UUIDs means quoting these arguments everywhere.
+- **IDs travel as `data-*` attributes** (see "Event handling" above) and are read back with `num()`. Periods and rounds use `Date.now()`; priorities and tasks use `Math.max(...ids)+1` within their parent. With Supabase UUIDs, the actions read them as strings instead, and no quoting is needed.
 - **User text goes into `innerHTML` and `value="..."` attributes without escaping.** A quote or `<` in user input can break the edit forms.
 - **Shared modals.** `#edit-overlay` serves many item types: adding, editing and renaming priorities, tasks, periods, rounds and 1-year targets.
   - Each opener calls `openEditModal(title, fieldsHtml, onSave)` (`src/edit-modal.ts`) and passes its own save logic.
@@ -138,24 +156,17 @@ Then run each migration in order, e.g. `psql -v ON_ERROR_STOP=1 -f supabase/migr
 
 ## To-do
 
-Roughly in order. The schema has been reviewed but not yet run on the real Supabase project.
+Roughly in order. The schema (`000_initial_schema.sql`) is applied on the hosted Supabase project, with a staff user. Client export files can be loaded with `pnpm import-dashboard`. The site is on Vercel, deployed from `main`, with build settings that work for the Vite code (confirmed 2026-11-25).
 
-1. **Run the schema on Supabase** with `pnpm supabase db push` and add the first staff user (snippet at the bottom of the initial migration). Adjust the tables after reviewing them in the table editor.
-2. **Check Vercel's build settings before the Vite code reaches `main`.**
-   - The site is deployed on Vercel from `main`, so merging to `main` publishes to production. The project was imported while `main` was still the single static `index.html`.
-   - The Vite code needs Framework Preset **Vite**: Build Command `pnpm build` (`tsc && vite build`, so type errors fail the deploy) and Output Directory `dist`. Otherwise production serves the raw `index.html` with `/src/main.ts` and loads blank.
-   - Check it on the preview deployment Vercel builds for each pushed branch before merging.
-   - If the build complains about the pnpm 12 version in `package.json`, set the environment variable `ENABLE_EXPERIMENTAL_COREPACK=1`.
-3. **Event delegation.** Replace the inline `on*="..."` handlers with `data-action` / `data-id` attributes and one `addEventListener` per container, one section at a time. Remove each function from the `window` bridge as its handlers move, and delete the bridge when it's empty. Once done, IDs travel as `data-id` strings, so UUIDs need no quoting.
-4. **Switch the app to Supabase.**
+1. **Switch the app to Supabase.**
    - Add `src/db.ts` for the Supabase reads and writes. `src/adapters.ts` already converts export JSON → rows; add the other direction (rows → the types in `src/types.ts`), so the render functions keep working on `state`. The smoke tests in `tests/` should keep passing, with Supabase stubbed out.
    - supabase-js and `src/database.types.ts` are already in place. Create the client as `createClient<Database>(...)`. Put `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in `.env.local` (local stack) and in Vercel's environment variables (hosted project). Never use a `VITE_` variable for the `service_role` key.
    - The Import button reuses `parseExportFile()` + `importDashboard()`, the same code as `pnpm import-dashboard`.
    - Add a login screen (staff or client). In Supabase Auth's URL configuration, allow `http://localhost:5173` and the Vercel URLs.
    - Load one business's data.
    - Replace the whole-state `save()` with row-level inserts, updates and deletes.
-   - IDs become UUIDs. After event delegation (step 3) they're plain `data-id` strings. Any inline handler still left needs the ID quoted (`fn('${id}')`).
+   - IDs become UUIDs. They already travel as `data-*` strings, so switch the actions from `num()` to a string reader.
    - Keep Export/Import working as a backup.
-5. **Escape user text** before it goes into `innerHTML` and `value="..."` attributes.
-6. **Session Notes card** (`addNote()`): either save the notes (which needs a table) or remove the card.
-7. **`periods120[].oneyear`:** either show it on the period panel or stop collecting it.
+2. **Escape user text** before it goes into `innerHTML` and `value="..."` attributes.
+3. **Session Notes card** (`addNote()`): either save the notes (which needs a table) or remove the card.
+4. **`periods120[].oneyear`:** either show it on the period panel or stop collecting it.
