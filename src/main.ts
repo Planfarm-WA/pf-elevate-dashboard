@@ -2,63 +2,13 @@
 // Each function gets types when it moves into its own module (CLAUDE.md to-do,
 // "Split src/main.ts into modules"). Remove this line once the file is typed or empty.
 
-const state = {
-  "periods120": [],
-  "rounds": [],
-  "sessions": [],
-  "blueprint": {
-    "tenyear": "",
-    "threeyear": "",
-    "values": [],
-    "oneyear": [],
-    "purpose": "",
-    "issues": []
-  },
-  "pendingPushes": [],
-  "pendingPushes120": []
-};
+import { initDragList, initDragTable } from './drag.ts';
+import { state } from './state.ts';
+import { updateStats } from './stats.ts';
+import { loadSaved, save, updateLastUpdatedDisplay } from './storage.ts';
+import { badgeFor, playBing, showToast } from './ui.ts';
 
-function save() {
-  try {
-    state.lastUpdated = new Date().toISOString();
-    localStorage.setItem('pf_elevate_blank1', JSON.stringify(state));
-    updateLastUpdatedDisplay();
-  } catch (err) {
-    console.error('Could not save to localStorage', err);
-  }
-}
-
-function updateLastUpdatedDisplay() {
-  const el = document.getElementById('last-updated-display');
-  if (!el) return;
-  const ts = state.lastUpdated;
-  if (!ts) { el.innerHTML = ''; return; }
-  const d = new Date(ts);
-  const date = d.toLocaleDateString('en-AU', {day:'numeric', month:'short', year:'numeric'});
-  const time = d.toLocaleTimeString('en-AU', {hour:'2-digit', minute:'2-digit'});
-  el.innerHTML = '<div style="font-size:10px;opacity:0.7;letter-spacing:0.04em;text-transform:uppercase;">Last updated</div><div style="font-size:12px;font-weight:500;">' + date + ' · ' + time + '</div>';
-}
-
-// Try to load saved state
-(function() {
-  try {
-    const saved = localStorage.getItem('pf_elevate_blank1');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed.blueprint) {
-        state.periods120 = parsed.periods120 || state.periods120;
-        state.rounds = parsed.rounds || state.rounds;
-        state.sessions = parsed.sessions || state.sessions;
-        state.blueprint = parsed.blueprint || state.blueprint;
-        state.pendingPushes = parsed.pendingPushes || [];
-        state.pendingPushes120 = parsed.pendingPushes120 || [];
-        state.lastUpdated = parsed.lastUpdated || parsed.exportedAt || null;
-      }
-    }
-  } catch (err) {
-    console.error('Could not load saved data from localStorage', err);
-  }
-})();
+loadSaved();
 
 function showSection(id, el) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
@@ -324,34 +274,6 @@ function switch120Period(id) {
   document.getElementById(`ppanel-${id}`)?.classList.add('active');
 }
 
-
-function playBing() {
-  try {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    const unlock = ctx.createBufferSource();
-    unlock.buffer = ctx.createBuffer(1, 1, 22050);
-    unlock.connect(ctx.destination);
-    unlock.start(0);
-    ctx.resume().then(() => {
-      const now = ctx.currentTime;
-      [[1046.5, 0.0], [1318.5, 0.13], [1568.0, 0.26]].forEach(([freq, delay]) => {
-        const osc = ctx.createOscillator();
-        const env = ctx.createGain();
-        osc.connect(env);
-        env.connect(ctx.destination);
-        osc.type = 'sine';
-        osc.frequency.value = freq;
-        env.gain.setValueAtTime(0.001, now + delay);
-        env.gain.linearRampToValueAtTime(0.6, now + delay + 0.015);
-        env.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.8);
-        osc.start(now + delay);
-        osc.stop(now + delay + 0.85);
-      });
-    });
-  } catch(e) { console.warn('playBing error:', e); }
-}
 
 function setStatus120(periodId,itemId,status) {
   const period = state.periods120.find(p=>p.id===periodId); if (!period) return;
@@ -660,25 +582,6 @@ function renamePeriod120(periodId) {
   document.getElementById('edit-overlay').classList.add('open');
 }
 
-function badgeFor(who) {
-  if (!who) return '';
-  const palette = ['badge-rob','badge-kellie','badge-paul','badge-peter','badge-robkellie','badge-team'];
-  return who.split(/[/,&]/).map(w => {
-    w = w.trim();
-    let hash = 0;
-    for (let i=0;i<w.length;i++) hash = (hash*31 + w.charCodeAt(i)) >>> 0;
-    const cls = palette[hash % palette.length];
-    return `<span class="badge ${cls}">${w}</span>`;
-  }).join(' ');
-}
-
-function showToast(msg) {
-  const t = document.createElement('div');
-  t.style.cssText=`position:fixed;bottom:24px;right:24px;background:var(--grey-dark);color:white;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:500;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.2);transition:opacity 0.3s`;
-  t.textContent=msg; document.body.appendChild(t);
-  setTimeout(()=>{ t.style.opacity='0'; setTimeout(()=>t.remove(),300); },2800);
-}
-
 function addNote() {
   const date = document.getElementById('note-date').value.trim();
   const who = document.getElementById('note-who').value.trim();
@@ -689,19 +592,6 @@ function addNote() {
   div.innerHTML=`<div style="font-size:12px;font-weight:700;color:var(--teal-dark);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">${date||'Undated'}${who?' — '+who:''}</div><div style="font-size:13px;color:var(--grey-mid);background:var(--grey-bg);padding:12px;border-radius:8px;line-height:1.7">${text}</div>`;
   document.getElementById('session-notes-list').appendChild(div);
   document.getElementById('note-date').value=''; document.getElementById('note-who').value=''; document.getElementById('note-text').value='';
-}
-
-function updateStats() {
-  const current120 = state.periods120.length ? state.periods120[state.periods120.length-1] : null;
-  document.getElementById('stat-120-done').textContent = current120 ? current120.priorities.filter(p=>p.status==='complete').length : 0;
-  document.getElementById('stat-120-ontrack').textContent = current120 ? current120.priorities.filter(p=>p.status==='on-track').length : 0;
-  const current30 = state.rounds.length ? state.rounds[state.rounds.length-1] : null;
-  if (current30) {
-    const done30 = current30.tasks.filter(t=>t.status==='complete').length;
-    document.getElementById('stat-30-done').textContent = `${done30} / ${current30.tasks.length}`;
-    const pct = current30.tasks.length ? Math.round(done30/current30.tasks.length*100) : 0;
-    document.getElementById('stat-30-ontrack').textContent = pct+'%';
-  }
 }
 
 function exportData() {
@@ -735,40 +625,6 @@ function importData(event) {
     showToast('Data imported successfully');
   };
   reader.readAsText(file); event.target.value='';
-}
-
-let dragSrc = null;
-
-function initDragTable(tbodyId,type,contextId) {
-  const tbody = document.getElementById(tbodyId); if (!tbody) return;
-  tbody.querySelectorAll('tr').forEach(row => {
-    row.addEventListener('dragstart',function(e){dragSrc=e.currentTarget;this.classList.add('dragging');e.dataTransfer.effectAllowed='move';});
-    row.addEventListener('dragend',function(){this.classList.remove('dragging');tbody.querySelectorAll('tr').forEach(r=>r.classList.remove('drag-over'));});
-    row.addEventListener('dragover',function(e){e.preventDefault();tbody.querySelectorAll('tr').forEach(r=>r.classList.remove('drag-over'));if(this!==dragSrc)this.classList.add('drag-over');e.dataTransfer.dropEffect='move';});
-    row.addEventListener('drop',function(e){
-      e.preventDefault();if(this===dragSrc)return;this.classList.remove('drag-over');
-      const rows=Array.from(tbody.querySelectorAll('tr'));const dragIdx=rows.indexOf(dragSrc);const dropIdx=rows.indexOf(this);
-      if(dragIdx<dropIdx)tbody.insertBefore(dragSrc,this.nextSibling);else tbody.insertBefore(dragSrc,this);
-      const newOrder=Array.from(tbody.querySelectorAll('tr')).map(r=>parseInt(r.getAttribute('data-id')));
-      if(type==='priorities120'){const period=state.periods120.find(p=>p.id===contextId);if(period){period.priorities.sort((a,b)=>newOrder.indexOf(a.id)-newOrder.indexOf(b.id));save();}}
-      else if(type==='tasks30'){const round=state.rounds.find(r=>r.id===contextId);if(round){round.tasks.sort((a,b)=>newOrder.indexOf(a.id)-newOrder.indexOf(b.id));save();}}
-    });
-  });
-}
-
-function initDragList(listId,type) {
-  const list = document.getElementById(listId); if (!list) return;
-  list.querySelectorAll('li').forEach(item => {
-    item.addEventListener('dragstart',function(e){dragSrc=e.currentTarget;this.classList.add('dragging');e.dataTransfer.effectAllowed='move';});
-    item.addEventListener('dragend',function(){this.classList.remove('dragging');list.querySelectorAll('li').forEach(i=>i.classList.remove('drag-over'));});
-    item.addEventListener('dragover',function(e){e.preventDefault();list.querySelectorAll('li').forEach(i=>i.classList.remove('drag-over'));if(this!==dragSrc)this.classList.add('drag-over');});
-    item.addEventListener('drop',function(e){
-      e.preventDefault();if(this===dragSrc)return;this.classList.remove('drag-over');
-      const items=Array.from(list.querySelectorAll('li'));const dragIdx=items.indexOf(dragSrc);const dropIdx=items.indexOf(this);
-      if(dragIdx<dropIdx)list.insertBefore(dragSrc,this.nextSibling);else list.insertBefore(dragSrc,this);
-      if(type==='oneyear'){const newOrder=Array.from(list.querySelectorAll('li')).map(i=>parseInt(i.getAttribute('data-idx')));const reordered=newOrder.map(idx=>state.blueprint.oneyear[idx]);state.blueprint.oneyear=reordered;list.querySelectorAll('li').forEach((li,i)=>li.setAttribute('data-idx',i));save();}
-    });
-  });
 }
 
 function addPrintStatusSpans() {
