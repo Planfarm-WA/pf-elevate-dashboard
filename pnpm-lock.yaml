@@ -184,13 +184,6 @@ settings:
 importers:
 
   .:
-    dependencies:
-      supabase:
-        specifier: ^3.3.0
-        version: 3.3.0
-      vite:
-        specifier: ^8.3.8
-        version: 8.3.8
     devDependencies:
       '@eslint/js':
         specifier: ^10.0.1
@@ -201,12 +194,18 @@ importers:
       globals:
         specifier: ^17.14.0
         version: 17.14.0
+      supabase:
+        specifier: ^3.3.0
+        version: 3.3.0
       typescript:
         specifier: ~6.0.3
         version: 6.0.3
       typescript-eslint:
         specifier: ^8.74.0
         version: 8.74.0(eslint@10.15.0)(typescript@6.0.3)
+      vite:
+        specifier: ^8.3.8
+        version: 8.3.8
 
 packages:
 
