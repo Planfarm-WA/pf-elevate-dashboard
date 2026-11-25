@@ -13,9 +13,9 @@ It is a blank per-client template: the header `<h1>Client Name</h1>` and the "Wh
 
 **`js/app.js` is a classic script, not an ES module.** The inline `onclick`/`onchange`/... handlers, in `index.html` and in template strings in `app.js`, call its top-level functions by name, so those must stay global. Don't add `type="module"`, and don't wrap the file in a function, until the handlers are replaced with `addEventListener`. A classic script also keeps opening `index.html` straight from disk (`file://`) working.
 
-The page has no build step, linter or test suite. To run it, open `index.html` in a browser, or serve the folder (`python3 -m http.server`) and open it there. The only external resource is Google Fonts (DM Sans, Fraunces).
+The page has no build step or test suite. `pnpm lint` runs ESLint on `js/` (config in `eslint.config.js`). To run it, open `index.html` in a browser, or serve the folder (`python3 -m http.server`) and open it there. The only external resource is Google Fonts (DM Sans, Fraunces).
 
-`package.json` (pnpm) exists only to install the Supabase CLI as a project dependency. Run it as `pnpm supabase <command>`, not bare `supabase`. The page itself uses no npm packages.
+`package.json` (pnpm) holds dev tooling only: the Supabase CLI and ESLint. Run the Supabase CLI as `pnpm supabase <command>`, not bare `supabase`. The page itself uses no npm packages.
 
 `supabase/migrations/` holds the planned database schema. **The app does not use Supabase yet.** It still reads and writes `localStorage` only.
 

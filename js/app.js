@@ -21,7 +21,9 @@ function save() {
     state.lastUpdated = new Date().toISOString();
     localStorage.setItem('pf_elevate_blank1', JSON.stringify(state));
     updateLastUpdatedDisplay();
-  } catch(e){}
+  } catch (err) {
+    console.error('Could not save to localStorage', err);
+  }
 }
 
 function updateLastUpdatedDisplay() {
@@ -51,7 +53,9 @@ function updateLastUpdatedDisplay() {
         state.lastUpdated = parsed.lastUpdated || parsed.exportedAt || null;
       }
     }
-  } catch(e) {}
+  } catch (err) {
+    console.error('Could not load saved data from localStorage', err);
+  }
 })();
 
 function showSection(id, el) {
@@ -185,7 +189,7 @@ function renderThreeYearTargets() {
   el.innerHTML = '<ul style="list-style:none;padding:0;margin:0">' + lines.map((line, idx) => {
     const done = !!state.blueprint.threeyearDone[idx];
     return `<li style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);${done?'opacity:0.6':''}">
-      <button onclick="toggleThreeYearDone(${idx})" title="${done?'Mark incomplete':'Mark complete'}" style="flex-shrink:0;margin-top:2px;width:22px;height:22px;border-radius:50%;border:2px solid ${done?'var(--lime)':'var(--teal-mid)'};background:${done?'var(--lime)':'white'};cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:all 0.15s;">${done?'<span style=\"color:white;font-size:13px;line-height:1\">✓</span>':''}</button>
+      <button onclick="toggleThreeYearDone(${idx})" title="${done?'Mark incomplete':'Mark complete'}" style="flex-shrink:0;margin-top:2px;width:22px;height:22px;border-radius:50%;border:2px solid ${done?'var(--lime)':'var(--teal-mid)'};background:${done?'var(--lime)':'white'};cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:all 0.15s;">${done?'<span style="color:white;font-size:13px;line-height:1">✓</span>':''}</button>
       <span style="flex:1;font-size:14px;color:var(--grey-mid);line-height:1.6;${done?'text-decoration:line-through':''}">${line}</span>
     </li>`;
   }).join('') + '</ul>';
@@ -657,7 +661,7 @@ function renamePeriod120(periodId) {
 function badgeFor(who) {
   if (!who) return '';
   const palette = ['badge-rob','badge-kellie','badge-paul','badge-peter','badge-robkellie','badge-team'];
-  return who.split(/[\/,&]/).map(w => {
+  return who.split(/[/,&]/).map(w => {
     w = w.trim();
     let hash = 0;
     for (let i=0;i<w.length;i++) hash = (hash*31 + w.charCodeAt(i)) >>> 0;
@@ -716,7 +720,7 @@ function importData(event) {
   const reader = new FileReader();
   reader.onload = function(e) {
     let data;
-    try { data = JSON.parse(e.target.result); } catch(err) { alert('Could not read file.'); return; }
+    try { data = JSON.parse(e.target.result); } catch { alert('Could not read file.'); return; }
     if (!data.version||!data.blueprint) { alert('Not a valid Planfarm data file.'); return; }
     if (!confirm('This will replace all current data. Continue?')) return;
     if (data.periods120) state.periods120=data.periods120;
@@ -768,7 +772,7 @@ function initDragList(listId,type) {
 function addPrintStatusSpans() {
   document.querySelectorAll('.priority-table tbody tr').forEach(tr => {
     tr.querySelectorAll('.print-status').forEach(el=>el.remove());
-    let statusText='',statusColor='';
+    let statusText, statusColor;
     if(tr.classList.contains('status-complete')){statusText='★ Complete';statusColor='#5a8a1a';}
     else if(tr.classList.contains('status-off-track')){statusText='✗ Off Track';statusColor='#c0392b';}
     else if(tr.querySelector('.active-on-track')){statusText='✓ On Track';statusColor='#088A9E';}
