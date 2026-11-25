@@ -5,9 +5,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 The Planfarm Elevate coaching dashboard, built and served by Vite:
-- `index.html` has the markup. It's Vite's entry point and loads the two files below.
+- `index.html` has the markup. It's Vite's entry point and loads `src/styles.css` and `src/main.ts`.
 - `src/styles.css` has all the styles. Many elements also carry inline `style="..."` attributes, in the markup and in JS template strings.
-- `src/main.ts` has all the code, as one TypeScript ES module (`<script type="module">`). It runs once the page has been parsed.
+- `src/` holds the code as typed TypeScript ES modules. `src/main.ts` is the entry (`<script type="module">`) and runs once the page has been parsed. Lower layers never import higher ones, so there are no import cycles. Only `main.ts` does anything when it loads.
+
+```
+src/
+  main.ts           startup: loadSaved → backdrop click listeners → render every tab → window bridge
+  types.ts          the saved data: State, Period120, Round30, Item, Session, Blueprint, ExportFile, …
+  state.ts          `state`, the single shared object
+  storage.ts        save(), loadSaved(), updateLastUpdatedDisplay(); localStorage key pf_elevate_blank1
+  dom.ts            byId<T>(): typed getElementById that throws "Missing element #id"
+  ui.ts             showToast(), playBing(), badgeFor()
+  stats.ts          updateStats() (the hidden #stat-* divs)
+  drag.ts           initDragTable(), initDragList()
+  edit-modal.ts     the shared #edit-overlay: openEditModal(), saveEdit(), closeEditModal()
+  navigation.ts     showSection() (nav tabs)
+  io.ts             exportData(), importData()
+  print.ts          printPeriod120(), printRound30(), printAll()
+  sections/         one module per tab: blueprint.ts, issues.ts, periods120.ts, rounds30.ts, sessions.ts
+```
 
 It is a blank per-client template: the header `<h1>Client Name</h1>` and the "Who" suggestions (`<datalist id="who-suggestions">`) in `index.html` are placeholders edited for each client.
 
@@ -21,25 +38,29 @@ Commands:
 
 There's no `vite.config.js`, because the defaults fit. Opening `index.html` straight from disk (`file://`) no longer works, because module scripts need a server. The only external resource is Google Fonts (DM Sans, Fraunces).
 
-**TypeScript.** Vite strips types when it serves and bundles, but never checks them. Only `pnpm typecheck` and `pnpm build` do. `tsconfig.json` is `strict`. `src/main.ts` is the old untyped code and starts with `// @ts-nocheck`, so `tsc` skips it, and `no-undef` is switched back on for it in ESLint meanwhile. New modules are written fully typed, with no `@ts-nocheck`. Without `@ts-nocheck`, `main.ts` currently has about 440 strict-mode errors.
+**TypeScript.** Vite strips types when it serves and bundles, but never checks them. Only `pnpm typecheck` and `pnpm build` do. `tsconfig.json` is `strict` and covers `src/` and `tests/`. Everything is fully typed: there's no `any` and no `@ts-nocheck`, and typescript-eslint's recommended rules reject both. Element lookups use `byId<T>()` where the element must exist, and plain `document.getElementById` plus a null check where it may be missing. Data parsed from JSON (`loadSaved`, `importData`) is cast to its type without validation, as before.
 
 **TypeScript is pinned to `~6.0`.** typescript-eslint 8 only supports TypeScript `<6.1`. TypeScript 7, the native Go compiler, has no stable JavaScript API yet, and typescript-eslint issue #10940 tracks support for TS ≥ 7.1. Don't let `pnpm add`/`pnpm update` move `typescript` to 7 until that lands, or `pnpm lint` fails to start ("typescript-eslint does not support TS 7.0"). Upgrade the two together.
 
-**The `window` bridge.** The inline `onclick`/`oninput`/`onchange` handlers, in `index.html` and in template strings in `main.ts`, call functions by name. Module code isn't global, so `Object.assign(window, {...})` at the bottom of `main.ts` puts those 43 functions on `window`. **Any function called from an inline handler must be in the bridge**, or clicking throws `ReferenceError: … is not defined`. `pnpm lint` catches a function that's only called from a handler and is missing from the bridge, because it shows as unused. It can't catch one that's also called from JS (for example the `close…Modal` functions). Remove entries as handlers move to event delegation (see To-do).
+**The `window` bridge.** The inline `onclick`/`oninput`/`onchange` handlers, in `index.html` and in the sections' template strings, call functions by name. Module code isn't global, so `Object.assign(window, {...})` at the bottom of `main.ts` puts those 43 functions on `window`. **Any function called from an inline handler must be exported from its module and listed in the bridge**, or clicking throws `ReferenceError: … is not defined`. The "window bridge" test in `pnpm test` fails if one is missing. Lint can't catch it, because exported functions never count as unused. Remove entries as handlers move to event delegation (see To-do).
 
 **`localStorage` is separate for each web address.** Data saved in a file-based copy, or at another address, doesn't appear at `localhost:5173`. Move it with Export/Import.
 
-`package.json` (pnpm) holds dev tooling only: Vite, TypeScript, ESLint (with typescript-eslint) and the Supabase CLI. Run the Supabase CLI as `pnpm supabase <command>`, not bare `supabase`. The page itself uses no npm packages yet.
+`package.json` (pnpm) holds dev tooling only: Vite, TypeScript, ESLint (with typescript-eslint), Vitest with jsdom, and the Supabase CLI. Run the Supabase CLI as `pnpm supabase <command>`, not bare `supabase`. The page itself uses no npm packages yet.
 
 `supabase/migrations/` holds the planned database schema. **The app does not use Supabase yet.** It still reads and writes `localStorage` only.
 
 ## How the page works
 
-- **Single global `state` object** (`periods120`, `rounds`, `sessions`, `blueprint`, `pendingPushes`, `pendingPushes120`, `lastUpdated`). Every change follows the same pattern: mutate `state`, call `save()` (which writes the whole object to `localStorage` key `pf_elevate_blank1` and stamps `lastUpdated`), then call the render function for that section.
+- **One shared `state` object** (`src/state.ts`: `periods120`, `rounds`, `sessions`, `blueprint`, `pendingPushes`, `pendingPushes120`, `lastUpdated`). Modules import it and change its properties. An imported binding can't be reassigned, but its properties can. Every change follows the same pattern: change `state`, call `save()` (which writes the whole object to `localStorage` key `pf_elevate_blank1` and stamps `lastUpdated`), then call the render function for that section.
 - **Render functions rebuild `innerHTML` from `state`:** `renderBlueprint`, `renderOneYearTargets`, `renderThreeYearTargets`, `render120Periods` / `renderPeriodPriorities`, `render30` / `renderRoundTasks`, `renderSessions`, `renderIssues`. `showSection()` re-renders a tab when it is opened.
+- **Variables used by only one area stay private to its module**, for example `currentSessionId` in `sessions.ts`, `currentBpSection` in `blueprint.ts`, and `dragSrc` in `drag.ts`.
 - **Event handling is inline `onclick="fn(${id})"` in template strings.** IDs are interpolated **unquoted**, so they must stay numeric. Periods and rounds use `Date.now()`; priorities and tasks use `Math.max(...ids)+1` within their parent. Moving to Supabase UUIDs means quoting these arguments everywhere.
 - **User text goes into `innerHTML` and `value="..."` attributes without escaping.** A quote or `<` in user input can break the edit forms.
-- **Shared modals.** `#edit-overlay` serves many item types: `editCtx.type` (`'120'`, `'120-new'`, `'30'`, `'30-new'`, `'rename-round'`, `'rename-period120'`, `'oneyear-new'`, `'oneyear-edit'`) picks the branch in `saveEdit()`. Blueprint text sections use `#bp-edit-overlay` with `currentBpSection`. Sessions have their own modal.
+- **Shared modals.** `#edit-overlay` serves many item types: adding, editing and renaming priorities, tasks, periods, rounds and 1-year targets.
+  - Each opener calls `openEditModal(title, fieldsHtml, onSave)` (`src/edit-modal.ts`) and passes its own save logic.
+  - `saveEdit()` reads `#ef-what` (always present) and `#ef-who`/`#ef-when` (`''` when absent). It does nothing while "what" is empty, otherwise runs `onSave` and closes the dialog.
+  - Blueprint text sections use `#bp-edit-overlay` with `currentBpSection`, and sessions have their own modal.
 - **The latest period/round is the active one** (last array element). `current` is set when a period or round is created.
 - **Status buttons toggle:** clicking the active status sets it back to `'none'`. Values are `none | on-track | off-track | complete`. Completing an item plays `playBing()`.
 - **Carry-over ("Push →"):** `pushTask` / `pushPriority120` set `pushed: true` and copy the item into the next round/period with `carriedFrom: <label>`. If there is no next one yet, the item is queued in `pendingPushes` / `pendingPushes120`, and `createRound` / `createPeriod120` empty that queue into the new round or period.
@@ -102,21 +123,18 @@ Roughly in order. The schema has been reviewed but not yet run on the real Supab
    - `when` → `by_when`; `current` → `is_current`; `date` → `session_date`.
    - `carriedFrom` → `carried_from`; `fromRound` / `fromPeriod` → `from_round` / `from_period`.
    - Array position → `sort_order`.
-3. **Split `src/main.ts` into modules**: state, db, adapters (database rows ⇄ `state`), one module per section (blueprint, 120-day, 30-day, sessions, issues), io (export/import), print, ui (toast, modals).
-   - Type each module fully as it moves out: interfaces for `state` (`Period`, `Priority`, `Round`, `Task`, `Session`, `Blueprint`, …) and typed DOM lookups (`.value` needs `HTMLInputElement` and similar).
-   - Keep the `window` bridge working while moving functions.
-   - Remove `// @ts-nocheck` from `main.ts` once it's typed or empty.
-4. **Deploy to Vercel**, still on `localStorage`. Vercel detects Vite and serves `dist/`. Make sure its Build Command runs `pnpm build` (`tsc && vite build`), so type errors fail the deploy. If the build complains about the pnpm 12 version in `package.json`, set the environment variable `ENABLE_EXPERIMENTAL_COREPACK=1`.
-5. **Event delegation.** Replace the inline `on*="..."` handlers with `data-action` / `data-id` attributes and one `addEventListener` per container, one section at a time. Remove each function from the `window` bridge as its handlers move, and delete the bridge when it's empty. Once done, IDs travel as `data-id` strings, so UUIDs need no quoting.
-6. **Switch the app to Supabase.**
+3. **Deploy to Vercel**, still on `localStorage`. Vercel detects Vite and serves `dist/`. Make sure its Build Command runs `pnpm build` (`tsc && vite build`), so type errors fail the deploy. If the build complains about the pnpm 12 version in `package.json`, set the environment variable `ENABLE_EXPERIMENTAL_COREPACK=1`.
+4. **Event delegation.** Replace the inline `on*="..."` handlers with `data-action` / `data-id` attributes and one `addEventListener` per container, one section at a time. Remove each function from the `window` bridge as its handlers move, and delete the bridge when it's empty. Once done, IDs travel as `data-id` strings, so UUIDs need no quoting.
+5. **Switch the app to Supabase.**
+   - Add `src/db.ts` for the Supabase reads and writes, and `src/adapters.ts` to convert database rows to and from the types in `src/types.ts`, so the render functions keep working on `state`. The smoke tests in `tests/` should keep passing, with Supabase stubbed out.
    - Install supabase-js with pnpm. Put `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in `.env.local` (local stack) and in Vercel's environment variables (hosted project). Never use a `VITE_` variable for the `service_role` key.
    - Generate database types with `pnpm supabase gen types typescript --local > src/database.types.ts`, and create the client as `createClient<Database>(...)` so queries are typed. Regenerate after every migration.
    - Add a login screen (staff or client). In Supabase Auth's URL configuration, allow `http://localhost:5173` and the Vercel URLs.
    - Load one business's data.
    - Replace the whole-state `save()` with row-level inserts, updates and deletes.
-   - IDs become UUIDs. After event delegation (step 5) they're plain `data-id` strings. Any inline handler still left needs the ID quoted (`fn('${id}')`).
+   - IDs become UUIDs. After event delegation (step 4) they're plain `data-id` strings. Any inline handler still left needs the ID quoted (`fn('${id}')`).
    - Keep Export/Import working as a backup.
-7. **Escape user text** before it goes into `innerHTML` and `value="..."` attributes.
-8. **Session Notes card** (`addNote()`): either save the notes (which needs a table) or remove the card.
-9. **`periods120[].oneyear`:** either show it on the period panel or stop collecting it.
-10. **Decide whether clients can edit or only view.** The current RLS lets them edit. Making them view-only means splitting the `"Business access"` policies into separate select and write policies.
+6. **Escape user text** before it goes into `innerHTML` and `value="..."` attributes.
+7. **Session Notes card** (`addNote()`): either save the notes (which needs a table) or remove the card.
+8. **`periods120[].oneyear`:** either show it on the period panel or stop collecting it.
+9. **Decide whether clients can edit or only view.** The current RLS lets them edit. Making them view-only means splitting the `"Business access"` policies into separate select and write policies.

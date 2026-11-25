@@ -23,6 +23,8 @@ pnpm dev       # then open http://localhost:5173
 
 `pnpm build` creates a `dist/` folder for hosting. Vercel is planned. Opening `index.html` straight from disk no longer works.
 
+Checks for developers: `pnpm test` runs the smoke tests, `pnpm lint` runs ESLint, and `pnpm typecheck` runs TypeScript.
+
 **Saving.** Changes save automatically in the browser you're using. They are not shared with anyone else, and don't move to another computer or browser by themselves. Clearing the browser's site data deletes them. The browser also keeps data separately for each web address. Data from an older copy you opened as a file, or from a different address, won't appear here until you move it with Export and Import.
 
 **Backing up and moving data.**
@@ -105,7 +107,10 @@ Dates such as "By When" are stored as text, because the dashboard accepts entrie
 ```
 index.html            The dashboard page (markup); Vite's entry point
 src/styles.css        Styles for the page
-src/main.ts           The dashboard's code (state, rendering, saving, import/export)
+src/main.ts           The code's entry point: loads the data and draws every tab
+src/sections/         One module per tab (blueprint, issues, 120-day, 30-day, sessions)
+src/*.ts              Shared modules: data types and state, saving, dialogs, export/import, printing
+tests/                Smoke tests (`pnpm test`), run in a simulated browser
 tsconfig.json         TypeScript settings (`pnpm typecheck`)
 eslint.config.js      Lint rules (`pnpm lint`)
 supabase/migrations/  Database tables and access rules for Supabase (CLI migrations)
