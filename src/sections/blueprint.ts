@@ -1,6 +1,7 @@
 // The Farm Blueprint tab: 10-Year Direction, 3-Year Picture, Core Values, 1-Year Targets and
 // Purpose, plus the blueprint text dialog (#bp-edit-overlay), which also edits the issues list.
 
+import { num, oneOf, type Actions } from '../actions.ts';
 import { byId } from '../dom.ts';
 import { initDragList } from '../drag.ts';
 import { openEditModal } from '../edit-modal.ts';
@@ -11,7 +12,8 @@ import { playBing } from '../ui.ts';
 import { renderIssues } from './issues.ts';
 
 /** The parts of the blueprint that the text dialog edits. */
-type BpSection = 'tenyear' | 'threeyear' | 'values' | 'purpose' | 'issues';
+const BP_SECTIONS = ['tenyear', 'threeyear', 'values', 'purpose', 'issues'] as const;
+type BpSection = (typeof BP_SECTIONS)[number];
 /** The parts stored as one block of text. */
 type BpTextSection = 'tenyear' | 'threeyear' | 'purpose';
 
@@ -168,3 +170,15 @@ export function closeBpEditModal(): void {
   byId('bp-edit-overlay').classList.remove('open');
   currentBpSection = null;
 }
+
+/** The blueprint's buttons: the Edit buttons and dialog in index.html, and the target lists above. */
+export const blueprintActions: Actions = {
+  editBlueprint: (el) => editBlueprint(oneOf(el, 'section', BP_SECTIONS)),
+  saveBpEdit,
+  closeBpEditModal,
+  addOneYearTarget,
+  toggleOneYearDone: (el) => toggleOneYearDone(num(el, 'idx')),
+  editOneYearTarget: (el) => editOneYearTarget(num(el, 'idx')),
+  deleteOneYearTarget: (el) => deleteOneYearTarget(num(el, 'idx')),
+  toggleThreeYearDone: (el) => toggleThreeYearDone(num(el, 'idx')),
+};

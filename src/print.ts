@@ -2,6 +2,7 @@
 // The @media print rules in styles.css do the layout: body.printing-single shows only the
 // .print-target section and panel, and the .print-status labels are only visible in print.
 
+import { num, type Actions } from './actions.ts';
 import { byId } from './dom.ts';
 import { renderBlueprint } from './sections/blueprint.ts';
 import { renderIssues } from './sections/issues.ts';
@@ -55,3 +56,10 @@ export function printAll(): void {
   addPrintStatusSpans(); window.print();
   setTimeout(() => cleanupPrintStatusSpans(), 1000);
 }
+
+/** The header's Print button and the Print button on each period and round card. */
+export const printActions: Actions = {
+  printAll,
+  printPeriod120: (el) => printPeriod120(num(el, 'periodId')),
+  printRound30: (el) => printRound30(num(el, 'roundId')),
+};

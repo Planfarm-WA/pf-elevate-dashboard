@@ -1,6 +1,7 @@
 // The shared edit dialog (#edit-overlay), used to add, edit and rename priorities, tasks,
 // periods, rounds and 1-year targets.
 
+import type { Actions } from './actions.ts';
 import { byId } from './dom.ts';
 
 /** What the dialog's fields held when Save was pressed. `who` and `when` are '' if absent. */
@@ -41,3 +42,6 @@ export function closeEditModal(): void {
   byId('edit-overlay').classList.remove('open');
   currentOnSave = null;
 }
+
+/** The dialog's Save and Cancel buttons in index.html. */
+export const editModalActions: Actions = { saveEdit, closeEditModal };

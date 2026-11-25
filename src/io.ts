@@ -1,6 +1,7 @@
 // Export Data and Import Data in the header. The JSON file is the backup format clients already
 // have, so changes to the state shape must still import older exports.
 
+import type { Actions } from './actions.ts';
 import { migrateOneYear, renderBlueprint } from './sections/blueprint.ts';
 import { renderIssues } from './sections/issues.ts';
 import { render120Periods } from './sections/periods120.ts';
@@ -50,3 +51,9 @@ export function importData(event: Event): void {
   };
   reader.readAsText(file); input.value = '';
 }
+
+/** The header's Export Data button and Import Data file input. */
+export const ioActions: Actions = {
+  exportData,
+  importData: (_el, event) => importData(event),
+};

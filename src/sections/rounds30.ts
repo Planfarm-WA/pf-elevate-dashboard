@@ -1,13 +1,14 @@
 // The 30-Day To-Do's tab: one tab per round, its tasks, statuses, "Push →", the round's coaching
 // notes, renaming, and the New Round dialog (#modal-overlay). The last round is the active one.
 
+import { num, oneOf, type Actions } from '../actions.ts';
 import { byId } from '../dom.ts';
 import { initDragTable } from '../drag.ts';
 import { openEditModal } from '../edit-modal.ts';
 import { state } from '../state.ts';
 import { updateStats } from '../stats.ts';
 import { save } from '../storage.ts';
-import type { Item, Status } from '../types.ts';
+import { STATUSES, type Item, type Status } from '../types.ts';
 import { badgeFor, playBing, showToast } from '../ui.ts';
 
 export function render30(): void {
@@ -204,3 +205,18 @@ export function createRound(): void {
   state.pendingPushes = [];
   save(); closeModal(); render30();
 }
+
+/** The 30-day buttons and notes box: on each round's card and task row, and in the New Round dialog. */
+export const rounds30Actions: Actions = {
+  addTask30: (el) => addTask30(num(el, 'roundId')),
+  editItem30: (el) => editItem30(num(el, 'roundId'), num(el, 'taskId')),
+  deleteTask30: (el) => deleteTask30(num(el, 'roundId'), num(el, 'taskId')),
+  pushTask: (el) => pushTask(num(el, 'roundId'), num(el, 'taskId')),
+  setStatus30: (el) => setStatus30(num(el, 'roundId'), num(el, 'taskId'), oneOf(el, 'status', STATUSES)),
+  saveRoundNotes: (el) => saveRoundNotes(num(el, 'roundId')),
+  showNewRoundModal,
+  closeModal,
+  addTaskRow,
+  removeTaskRow: (el) => removeTaskRow(num(el, 'row')),
+  createRound,
+};

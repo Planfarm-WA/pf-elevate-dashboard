@@ -28,6 +28,8 @@ body { font-family: 'DM Sans', sans-serif; background: var(--grey-bg); color: va
 .header-client { color: white; text-align: right; }
 .header-client h1 { font-family: 'Fraunces', serif; font-size: 20px; font-weight: 600; line-height: 1.2; }
 .header-client p { font-size: 12px; opacity: 0.8; letter-spacing: 0.05em; }
+.header-btn { padding: 6px 12px; background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.35); border-radius: 7px; font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 600; cursor: pointer; }
+.header-btn:hover { background: rgba(255,255,255,0.25); }
 .nav-tabs { background: var(--teal-dark); display: flex; max-width: 100%; overflow-x: auto; padding: 0 32px; }
 .nav-tab { padding: 12px 20px; color: rgba(255,255,255,0.7); font-size: 13px; font-weight: 500; cursor: pointer; border-bottom: 3px solid transparent; white-space: nowrap; transition: all 0.2s; letter-spacing: 0.02em; }
 .nav-tab:hover { color: white; }

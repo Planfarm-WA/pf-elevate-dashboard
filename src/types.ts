@@ -1,7 +1,10 @@
 // The dashboard's data, as saved in localStorage and in exported files (export version 3).
 
+/** Every status. A list you can check against at runtime, as well as the type below. */
+export const STATUSES = ['none', 'on-track', 'off-track', 'complete'] as const;
+
 /** Status of a 120-day priority or a 30-day task. Clicking the active status sets it back to 'none'. */
-export type Status = 'none' | 'on-track' | 'off-track' | 'complete';
+export type Status = (typeof STATUSES)[number];
 
 /** A 120-day priority or a 30-day task. */
 export interface Item {

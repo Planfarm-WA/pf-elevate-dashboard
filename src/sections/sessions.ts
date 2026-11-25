@@ -1,6 +1,7 @@
 // The Coaching Sessions tab: the sessions table, the session dialog (#session-edit-overlay)
 // and the Session Notes card.
 
+import { num, type Actions } from '../actions.ts';
 import { byId } from '../dom.ts';
 import { state } from '../state.ts';
 import { save } from '../storage.ts';
@@ -95,3 +96,13 @@ export function addNote(): void {
   byId<HTMLInputElement>('note-who').value = '';
   byId<HTMLTextAreaElement>('note-text').value = '';
 }
+
+/** The sessions buttons: Add Session, each row's Edit, the session dialog and Save Note. */
+export const sessionsActions: Actions = {
+  showAddSessionModal,
+  editSession: (el) => editSession(num(el, 'sessionId')),
+  saveSessionEdit,
+  deleteSession,
+  closeSessionEditModal,
+  addNote,
+};

@@ -134,19 +134,35 @@ function run(call: string, type = 'click'): void {
   fire($(`[on${type}="${call}"]`), type);
 }
 
+/** The attribute behind a dataset-style key: 'periodId' → 'data-period-id'. */
+function dataAttr(key: string): string {
+  return 'data-' + key.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());
+}
+
+/**
+ * Do what a user does to the element whose data-<type> attribute names `action` and whose other
+ * data-* attributes match `data`: dispatch a real, bubbling DOM event. The page's delegated
+ * listener (src/actions.ts) handles it, exactly as in the browser.
+ */
+function act(action: string, data: Record<string, string | number> = {}, type: 'click' | 'input' | 'change' = 'click'): void {
+  const selector = `[data-${type}="${action}"]` + Object.entries(data).map(([key, value]) => `[${dataAttr(key)}="${value}"]`).join('');
+  const event = type === 'click' ? new MouseEvent('click', { bubbles: true, cancelable: true }) : new Event(type, { bubbles: true });
+  $(selector).dispatchEvent(event);
+}
+
 /** Fill the shared edit dialog (#edit-overlay) and press Save. */
 function saveEditDialog(fields: { what?: string; who?: string; when?: string }): void {
   if (fields.what !== undefined) setValue('#ef-what', fields.what);
   if (fields.who !== undefined) setValue('#ef-who', fields.who);
   if (fields.when !== undefined) setValue('#ef-when', fields.when);
-  run('saveEdit()');
+  act('saveEdit');
 }
 
 function editBlueprint(section: string, text: string): void {
-  run(`editBlueprint('${section}')`);
+  act('editBlueprint', { section });
   expect($('#bp-edit-overlay').classList.contains('open')).toBe(true);
   setValue('#bp-edit-val', text);
-  run('saveBpEdit()');
+  act('saveBpEdit');
 }
 
 type Row = [what: string, who?: string, when?: string];
@@ -163,22 +179,22 @@ function fillRows(container: string, rows: Row[]): void {
 }
 
 function createPeriod(label: string, period: string, rows: Row[] = []): number {
-  run('showNew120Modal()');
+  act('showNew120Modal');
   setValue('#new-120-label', label);
   setValue('#new-120-period', period);
   fillRows('#task-rows-120', rows);
-  run('createPeriod120()');
+  act('createPeriod120');
   const created = saved().periods120.at(-1);
   if (!created) throw new Error('No period was created');
   return created.id;
 }
 
 function createRound(label: string, period: string, rows: Row[] = []): number {
-  run('showNewRoundModal()');
+  act('showNewRoundModal');
   setValue('#new-round-label', label);
   setValue('#new-round-period', period);
   fillRows('#task-rows', rows);
-  run('createRound()');
+  act('createRound');
   const created = saved().rounds.at(-1);
   if (!created) throw new Error('No round was created');
   return created.id;
@@ -229,9 +245,12 @@ function readBlob(blob: Blob): Promise<string> {
 function importFile(file: File): void {
   const input = $('input[type="file"]');
   Object.defineProperty(input, 'files', { value: [file], configurable: true });
-  const event = new Event('change');
-  Object.defineProperty(event, 'target', { value: input });
-  fire(input, 'change', event);
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+/** Every action named in data-click / data-input / data-change attributes in `text`. */
+function actionNames(text: string): Set<string> {
+  return new Set([...text.matchAll(/\bdata-(?:click|input|change)="([A-Za-z0-9_]+)"/g)].map((m) => m[1]));
 }
 
 /** Every function name called inside on*="..." attributes in `text`. */
@@ -353,10 +372,10 @@ describe('blueprint', () => {
 
   it('adds, edits, ticks and deletes 1-year targets', async () => {
     await startApp();
-    run('addOneYearTarget()');
+    act('addOneYearTarget');
     expect($('#edit-title').textContent).toBe('Add 1-Year Target');
     saveEditDialog({ what: 'Fence the north paddock' });
-    run('addOneYearTarget()');
+    act('addOneYearTarget');
     saveEditDialog({ what: 'Hire a manager' });
 
     run('editOneYearTarget(1)');
@@ -375,7 +394,7 @@ describe('blueprint', () => {
 
   it('keeps the edit dialog open when "what" is empty, and closes it on an outside click', async () => {
     await startApp();
-    run('addOneYearTarget()');
+    act('addOneYearTarget');
     saveEditDialog({ what: '   ' });
     expect(isOpen('#edit-overlay')).toBe(true);
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
@@ -388,14 +407,14 @@ describe('blueprint', () => {
 describe('120-day priorities', () => {
   it('creates a period from the dialog', async () => {
     await startApp();
-    run('showNew120Modal()');
+    act('showNew120Modal');
     expect($('#modal-120-overlay').style.display).toBe('flex');
     expect($$('#task-rows-120 .form-row')).toHaveLength(3);
     setValue('#new-120-label', 'Period 1');
     setValue('#new-120-period', 'Jan – Apr 2026');
     setValue('#new-120-targets', 'Target A\nTarget B');
     fillRows('#task-rows-120', [['Fix fences', 'Sam', 'Feb'], ['Buy seed']]);
-    run('createPeriod120()');
+    act('createPeriod120');
 
     const [period] = saved().periods120;
     expect(period).toMatchObject({
@@ -415,8 +434,8 @@ describe('120-day priorities', () => {
 
   it('needs a label for a new period', async () => {
     await startApp();
-    run('showNew120Modal()');
-    run('createPeriod120()');
+    act('showNew120Modal');
+    act('createPeriod120');
     expect(alert).toHaveBeenCalledWith('Please enter a period label.');
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
   });
@@ -459,10 +478,10 @@ describe('120-day priorities', () => {
     expect($(`#body-120-${first}`).textContent).toContain('Pushed ✓');
     expect(document.body.textContent).toContain('Priority will be added to the next new period you create ✓');
 
-    run('showNew120Modal()');
+    act('showNew120Modal');
     expect($('#pushed-120-notice').textContent).toContain('1 priority will be carried over');
     setValue('#new-120-label', 'Period 2');
-    run('createPeriod120()');
+    act('createPeriod120');
     const [p1, p2] = saved().periods120;
     expect(p1.current).toBe(false);
     expect(p2).toMatchObject({ label: 'Period 2', period: 'Period 2', current: true });
@@ -537,9 +556,9 @@ describe('30-day to-dos', () => {
 
     run(`pushTask(${first},1)`);
     expect(saved().pendingPushes).toEqual([{ what: 'Order fuel', who: 'Sam', when: '10 May', fromRound: 'Round 1' }]);
-    run('showNewRoundModal()');
+    act('showNewRoundModal');
     expect($('#pushed-tasks-notice').textContent).toContain('1 task will be carried over');
-    run('closeModal()');
+    act('closeModal');
     expect($('#modal-overlay').style.display).toBe('none');
 
     const second = createRound('Round 2', '');
@@ -563,8 +582,8 @@ describe('30-day to-dos', () => {
 
   it('needs a label for a new round', async () => {
     await startApp();
-    run('showNewRoundModal()');
-    run('createRound()');
+    act('showNewRoundModal');
+    act('createRound');
     expect(alert).toHaveBeenCalledWith('Please enter a round label.');
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
   });
@@ -573,14 +592,14 @@ describe('30-day to-dos', () => {
 describe('coaching sessions', () => {
   it('adds, edits and deletes sessions', async () => {
     await startApp();
-    run('showAddSessionModal()');
+    act('showAddSessionModal');
     expect($('#session-edit-title').textContent).toBe('Add New Session');
     expect($('#session-delete-btn').style.display).toBe('none');
     setValue('#se-date', '1 May 2026');
     setValue('#se-format', 'Teams');
     setValue('#se-focus', 'Round 1 review');
     setValue('#se-notes', 'Bring numbers');
-    run('saveSessionEdit()');
+    act('saveSessionEdit');
     expect(saved().sessions).toEqual([
       { id: 1, date: '1 May 2026', format: 'Teams', focus: 'Round 1 review', notes: 'Bring numbers', done: false },
     ]);
@@ -591,21 +610,21 @@ describe('coaching sessions', () => {
     expect(value('#se-focus')).toBe('Round 1 review');
     ($('#se-done') as HTMLInputElement).checked = true;
     setValue('#se-focus', 'Round 1 wrap-up');
-    run('saveSessionEdit()');
+    act('saveSessionEdit');
     expect(saved().sessions[0]).toMatchObject({ focus: 'Round 1 wrap-up', done: true });
     expect($('#sessions-tbody').textContent).toContain('✓ Done');
 
     run('editSession(1)');
-    run('deleteSession()');
+    act('deleteSession');
     expect(saved().sessions).toEqual([]);
     expect(isOpen('#session-edit-overlay')).toBe(false);
   });
 
   it('needs a date and a focus', async () => {
     await startApp();
-    run('showAddSessionModal()');
+    act('showAddSessionModal');
     setValue('#se-focus', 'Review');
-    run('saveSessionEdit()');
+    act('saveSessionEdit');
     expect(alert).toHaveBeenCalledWith('Please enter at least a date and focus.');
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
   });
@@ -615,7 +634,7 @@ describe('coaching sessions', () => {
     setValue('#note-date', '1 May');
     setValue('#note-who', 'Sam');
     setValue('#note-text', 'Talked about water');
-    run('addNote()');
+    act('addNote');
     expect($('#session-notes-list').textContent).toContain('1 May — Sam');
     expect($('#session-notes-list').textContent).toContain('Talked about water');
     expect(value('#note-text')).toBe('');
@@ -641,7 +660,7 @@ describe('export and import', () => {
     });
     await startApp(data);
 
-    run('exportData()');
+    act('exportData');
     expect(blobs).toHaveLength(1);
     const exported = JSON.parse(await readBlob(blobs[0])) as Record<string, unknown>;
     expect(exported).toMatchObject({
@@ -741,7 +760,7 @@ describe('printing', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     await startApp();
     createPeriod('Period 1', 'Jan', [['Fix fences']]);
-    run('printAll()');
+    act('printAll');
     expect(print).toHaveBeenCalledTimes(1);
     expect($$('.print-status')).toHaveLength(1);
     vi.advanceTimersByTime(1000);
@@ -752,7 +771,7 @@ describe('printing', () => {
 describe('navigation', () => {
   it('switches tabs', async () => {
     await startApp();
-    run("showSection('coaching', this)");
+    act('showSection', { section: 'coaching' });
     expect($('#coaching').classList.contains('active')).toBe(true);
     expect($('#blueprint').classList.contains('active')).toBe(false);
     expect($('.nav-tab.active').textContent).toContain('Coaching');
@@ -795,6 +814,20 @@ describe('drag and drop', () => {
   });
 });
 
+describe('event delegation', () => {
+  it('has an action for every data-click / data-input / data-change in the markup', async () => {
+    const sources = import.meta.glob<string>('../src/**/*.ts', { query: '?raw', import: 'default', eager: true });
+    const used = new Set<string>();
+    for (const text of [indexHtml, ...Object.values(sources)]) {
+      for (const name of actionNames(text)) used.add(name);
+    }
+    expect(used.size).toBeGreaterThan(15);
+
+    const { actions } = await import('../src/main.ts');
+    expect([...used].filter((name) => !(name in actions))).toEqual([]);
+  });
+});
+
 describe('window bridge', () => {
   it('has every function that an inline handler calls', async () => {
     const sources = import.meta.glob<string>('../src/**/*.ts', { query: '?raw', import: 'default', eager: true });
@@ -802,7 +835,7 @@ describe('window bridge', () => {
     for (const text of [indexHtml, ...Object.values(sources)]) {
       for (const name of handlerNames(text)) names.add(name);
     }
-    expect(names.size).toBeGreaterThan(40);
+    expect(names.size).toBeGreaterThan(10);
 
     await startApp();
     const bridge = window as unknown as Record<string, unknown>;

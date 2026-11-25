@@ -1,13 +1,14 @@
 // The 120-Day Priorities tab: one tab per period, its priorities, statuses, "Push →", renaming,
 // and the New Period dialog (#modal-120-overlay). The last period is the active one.
 
+import { num, oneOf, type Actions } from '../actions.ts';
 import { byId } from '../dom.ts';
 import { initDragTable } from '../drag.ts';
 import { openEditModal } from '../edit-modal.ts';
 import { state } from '../state.ts';
 import { updateStats } from '../stats.ts';
 import { save } from '../storage.ts';
-import type { Item, Status } from '../types.ts';
+import { STATUSES, type Item, type Status } from '../types.ts';
 import { badgeFor, playBing, showToast } from '../ui.ts';
 
 export function render120Periods(): void {
@@ -198,3 +199,17 @@ export function createPeriod120(): void {
   state.pendingPushes120 = [];
   save(); closeNew120Modal(); render120Periods(); showToast(`Period "${label}" created ✓`);
 }
+
+/** The 120-day buttons: on each period's card and priority row, and in the New Period dialog. */
+export const periods120Actions: Actions = {
+  addPriority120: (el) => addPriority120(num(el, 'periodId')),
+  editItem120: (el) => editItem120(num(el, 'periodId'), num(el, 'itemId')),
+  deletePriority120: (el) => deletePriority120(num(el, 'periodId'), num(el, 'itemId')),
+  pushPriority120: (el) => pushPriority120(num(el, 'periodId'), num(el, 'itemId')),
+  setStatus120: (el) => setStatus120(num(el, 'periodId'), num(el, 'itemId'), oneOf(el, 'status', STATUSES)),
+  showNew120Modal,
+  closeNew120Modal,
+  add120TaskRow,
+  remove120TaskRow: (el) => remove120TaskRow(num(el, 'row')),
+  createPeriod120,
+};

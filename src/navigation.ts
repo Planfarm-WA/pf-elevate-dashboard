@@ -1,5 +1,6 @@
 // The nav tabs at the top of the page.
 
+import { oneOf, type Actions } from './actions.ts';
 import { byId } from './dom.ts';
 import { renderBlueprint } from './sections/blueprint.ts';
 import { renderIssues } from './sections/issues.ts';
@@ -9,9 +10,10 @@ import { renderSessions } from './sections/sessions.ts';
 import { updateStats } from './stats.ts';
 
 /** The id of each tab's .section element in index.html. */
-export type SectionId = 'blueprint' | 'priorities-120' | 'todos-30' | 'issues-opportunities' | 'coaching';
+export const SECTION_IDS = ['blueprint', 'priorities-120', 'todos-30', 'issues-opportunities', 'coaching'] as const;
+export type SectionId = (typeof SECTION_IDS)[number];
 
-/** Show a tab's section and re-render it. `el` is the clicked tab (`this` in its handler). */
+/** Show a tab's section and re-render it. `el` is the clicked nav tab. */
 export function showSection(id: SectionId, el?: HTMLElement | null): void {
   document.querySelectorAll('.section').forEach((s) => s.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach((t) => t.classList.remove('active'));
@@ -23,3 +25,8 @@ export function showSection(id: SectionId, el?: HTMLElement | null): void {
   if (id === 'blueprint') { renderBlueprint(); updateStats(); }
   if (id === 'coaching') renderSessions();
 }
+
+/** <div class="nav-tab" data-click="showSection" data-section="coaching"> */
+export const navigationActions: Actions = {
+  showSection: (el) => showSection(oneOf(el, 'section', SECTION_IDS), el),
+};
