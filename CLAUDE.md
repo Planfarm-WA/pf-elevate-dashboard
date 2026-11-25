@@ -44,7 +44,7 @@ Supabase CLI migrations. `000_initial_schema.sql` creates everything, wrapped in
 - **Migrations:** until the initial migration has been run on the real project, edit it in place. After that, never edit an applied migration. Put each change in a new file (`pnpm supabase migration new <name>`).
 
 - **Naming:** a farm business is a row in `businesses`; a "client" is a login that belongs to a business (a row in `clients`, linking `business_id` to `auth.users`). In `index.html` and the README's per-copy setup, "client" still means the farm itself.
-- **Structure:** everything belongs to `businesses` via `business_id`. Each JSON list becomes a table with a `sort_order` column.
+- **Structure:** everything belongs to a business via `business_id`. Most tables reference `businesses (id)`. The Blueprint lists (`core_values`, `three_year_items`, `one_year_targets`) reference `blueprints (business_id)` instead, so deleting a blueprint clears them. `issues` stays under `businesses`, because it has its own tab. The `create_blueprint` trigger inserts an empty `blueprints` row for each new business, so list inserts never lack a parent: update the blueprint, never insert one. Each JSON list becomes a table with a `sort_order` column.
 - **Differences from the JSON export:**
   - `when` → `by_when` (`WHEN` is reserved in SQL).
   - `threeyear` + `threeyearDone` → `three_year_items` rows.

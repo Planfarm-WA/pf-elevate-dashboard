@@ -79,11 +79,29 @@ create table public.blueprints (
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
-comment on table public.blueprints is '10-Year Direction and Purpose. One row per business.';
+comment on table public.blueprints is '10-Year Direction and Purpose. One row per business, created automatically with the business. Parent of the Blueprint lists (core_values, three_year_items, one_year_targets).';
 
+-- Every business gets an empty blueprint, so the Blueprint lists below always
+-- have a parent row to reference.
+create function public.create_blueprint_for_business()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  insert into public.blueprints (business_id) values (new.id);
+  return new;
+end;
+$$;
+
+create trigger create_blueprint after insert on public.businesses
+  for each row execute function public.create_blueprint_for_business();
+
+-- The Blueprint lists reference blueprints (whose key is business_id), not
+-- businesses directly: deleting a blueprint clears its lists.
 create table public.core_values (
   id          uuid primary key default gen_random_uuid(),
-  business_id uuid not null references public.businesses (id) on delete cascade,
+  business_id uuid not null references public.blueprints (business_id) on delete cascade,
   text        text not null,
   sort_order  integer not null default 0,
   created_at  timestamptz not null default now(),
@@ -94,7 +112,7 @@ comment on table public.core_values is 'Our Core Values (blueprint.values).';
 
 create table public.three_year_items (
   id          uuid primary key default gen_random_uuid(),
-  business_id uuid not null references public.businesses (id) on delete cascade,
+  business_id uuid not null references public.blueprints (business_id) on delete cascade,
   text        text not null,
   done        boolean not null default false,
   sort_order  integer not null default 0,
@@ -106,7 +124,7 @@ comment on table public.three_year_items is '3-Year Picture: one row per item (b
 
 create table public.one_year_targets (
   id          uuid primary key default gen_random_uuid(),
-  business_id uuid not null references public.businesses (id) on delete cascade,
+  business_id uuid not null references public.blueprints (business_id) on delete cascade,
   text        text not null,
   done        boolean not null default false,
   sort_order  integer not null default 0,
