@@ -49,25 +49,25 @@ The dashboard is moving from browser storage to Supabase, so data is shared and 
    insert into public.staff (user_id)
    select id from auth.users where email = 'you@example.com';
    ```
-4. To give a client login access to their farm, create the login, then run:
+4. To give a client login access to their farm business, create the login, then run:
    ```sql
-   insert into public.client_members (client_id, user_id)
-   select c.id, u.id
-   from public.clients c, auth.users u
-   where c.name = 'Client Name' and u.email = 'client@example.com';
+   insert into public.clients (business_id, user_id)
+   select b.id, u.id
+   from public.businesses b, auth.users u
+   where b.name = 'Business Name' and u.email = 'client@example.com';
    ```
 
 ### Who can see what
 
-- **Staff** (listed in `staff`) can see and edit every client.
-- **Client logins** (listed in `client_members`) can see and edit only their own farm. They can't add clients or change who has access.
+- **Staff** (listed in `staff`) can see and edit every business.
+- **Clients** (logins listed in `clients`) can see and edit only their own farm business. They can't add businesses or change who has access.
 - **People not logged in** can't see anything.
 
 ### Tables
 
 | Dashboard area | Tables |
 |---|---|
-| Clients and access | `clients`, `staff`, `client_members` |
+| Businesses and access | `businesses`, `staff`, `clients` |
 | Farm Blueprint | `blueprints`, `core_values`, `three_year_items`, `one_year_targets`, `issues` |
 | 120-Day Priorities | `periods_120`, `priorities_120`, `pending_priorities_120` |
 | 30-Day To-Do's | `rounds_30`, `tasks_30`, `pending_tasks_30` |

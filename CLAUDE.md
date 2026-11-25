@@ -39,16 +39,17 @@ There is no build step, package manager, linter or test suite. To run it, open `
 
 One script, run in the Supabase SQL Editor, wrapped in a single transaction.
 
-- **Structure:** everything belongs to `clients`. Each JSON list becomes a table with a `sort_order` column.
+- **Naming:** a farm business is a row in `businesses`; a "client" is a login that belongs to a business (a row in `clients`, linking `business_id` to `auth.users`). In `index.html` and the README's per-copy setup, "client" still means the farm itself.
+- **Structure:** everything belongs to `businesses` via `business_id`. Each JSON list becomes a table with a `sort_order` column.
 - **Differences from the JSON export:**
   - `when` → `by_when` (`WHEN` is reserved in SQL).
   - `threeyear` + `threeyearDone` → `three_year_items` rows.
   - The `OPPORTUNITY:` prefix → `issues.kind` (`issue_kind` enum).
   - `status` → `item_status` enum.
   - Free-text dates (`by_when`, `period`, `session_date`) stay `text`, because the app accepts "TBC".
-  - A partial unique index on `is_current` allows one current period/round per client.
-- **Access (RLS).** `staff` rows can access every client. `client_members` rows can access their own client(s). `anon` gets nothing. The checks are the `security definer` helpers `is_staff()` and `can_access_client(client_id)`. `priorities_120` and `tasks_30` have no `client_id` and resolve it through their parent period/round.
-- **Adding a table:** enable RLS, add a `can_access_client` policy, grant to `authenticated`, revoke from `anon`, and add the `set_updated_at` trigger if the table has `updated_at`.
+  - A partial unique index on `is_current` allows one current period/round per business.
+- **Access (RLS).** `staff` rows can access every business. `clients` rows can access their own business(es). `anon` gets nothing. The checks are the `security definer` helpers `is_staff()` and `can_access_business(business_id)`. `priorities_120` and `tasks_30` have no `business_id` and resolve it through their parent period/round.
+- **Adding a table:** enable RLS, add a `can_access_business` policy, grant to `authenticated`, revoke from `anon`, and add the `set_updated_at` trigger if the table has `updated_at`.
 
 To check schema changes without a Supabase project, run the script against a throwaway local Postgres. First create a stub of what Supabase provides:
 
@@ -70,7 +71,7 @@ Then run `psql -v ON_ERROR_STOP=1 -f supabase/schema.sql`. To test RLS as a user
 Roughly in order. The schema has been reviewed but not yet run on the real Supabase project.
 
 1. **Run the schema on Supabase** and add the first staff user (snippet at the bottom of `schema.sql`). Adjust the tables after reviewing them in the table editor.
-2. **Import existing JSON exports** into the tables, e.g. a SQL function `import_dashboard(client_id uuid, data jsonb)`. The import has to map:
+2. **Import existing JSON exports** into the tables, e.g. a SQL function `import_dashboard(business_id uuid, data jsonb)`. The import has to map:
    - `threeyear`: split on blank lines, with `done` taken from `threeyearDone[index]`.
    - `issues`: an `OPPORTUNITY: ` prefix becomes `kind = 'opportunity'`.
    - `oneyear`: items can be plain strings or `{text, done}`.
@@ -78,12 +79,12 @@ Roughly in order. The schema has been reviewed but not yet run on the real Supab
    - `carriedFrom` → `carried_from`; `fromRound` / `fromPeriod` → `from_round` / `from_period`.
    - Array position → `sort_order`.
 3. **Switch the app to Supabase.**
-   - Add supabase-js and a login screen (staff or client member).
-   - Load one client's data.
+   - Add supabase-js and a login screen (staff or client).
+   - Load one business's data.
    - Replace the whole-state `save()` with row-level inserts, updates and deletes.
    - Quote the IDs in every inline `onclick="fn(${id})"`, because UUIDs aren't numbers.
    - Keep Export/Import working as a backup.
 4. **Escape user text** before it goes into `innerHTML` and `value="..."` attributes.
 5. **Session Notes card** (`addNote()`): either save the notes (which needs a table) or remove the card.
 6. **`periods120[].oneyear`:** either show it on the period panel or stop collecting it.
-7. **Decide whether client members can edit or only view.** The current RLS lets them edit. Making them view-only means splitting the `"Client access"` policies into separate select and write policies.
+7. **Decide whether clients can edit or only view.** The current RLS lets them edit. Making them view-only means splitting the `"Business access"` policies into separate select and write policies.
