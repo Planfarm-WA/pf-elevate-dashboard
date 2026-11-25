@@ -30,6 +30,17 @@ body { font-family: 'DM Sans', sans-serif; background: var(--grey-bg); color: va
 .header-client p { font-size: 12px; opacity: 0.8; letter-spacing: 0.05em; }
 .header-btn { padding: 6px 12px; background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.35); border-radius: 7px; font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 600; cursor: pointer; }
 .header-btn:hover { background: rgba(255,255,255,0.25); }
+[hidden] { display: none !important; }
+.auth-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; background: var(--grey-bg); }
+.auth-card { background: white; border-radius: 14px; padding: 32px; width: 100%; max-width: 380px; box-shadow: 0 20px 60px rgba(0,0,0,0.08); display: flex; flex-direction: column; gap: 8px; }
+.auth-title { font-family: 'Fraunces', serif; font-size: 24px; font-weight: 600; color: var(--teal-dark); }
+.auth-sub { font-size: 13px; color: var(--grey-light); margin-bottom: 8px; }
+.auth-label { font-size: 12px; font-weight: 600; color: var(--grey-dark); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 6px; }
+.auth-error { color: #c0392b; font-size: 13px; }
+.auth-card .btn { margin-top: 12px; justify-content: center; }
+.business-list { list-style: none; padding: 0; margin: 4px 0 4px; display: flex; flex-direction: column; gap: 8px; }
+.business-list button { width: 100%; text-align: left; padding: 12px 14px; border: 1px solid var(--teal-mid); border-radius: 9px; background: white; font: inherit; font-weight: 600; color: var(--grey-dark); cursor: pointer; }
+.business-list button:hover { border-color: var(--teal); background: var(--teal-light); }
 .nav-tabs { background: var(--teal-dark); display: flex; max-width: 100%; overflow-x: auto; padding: 0 32px; }
 .nav-tab { padding: 12px 20px; color: rgba(255,255,255,0.7); font-size: 13px; font-weight: 500; cursor: pointer; border-bottom: 3px solid transparent; white-space: nowrap; transition: all 0.2s; letter-spacing: 0.02em; }
 .nav-tab:hover { color: white; }

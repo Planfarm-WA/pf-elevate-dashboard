@@ -9,6 +9,38 @@
 </head>
 <body>
 
+<!-- Supabase mode: log in, then choose a business (hidden in local mode) -->
+<div id="login-screen" class="auth-screen" hidden>
+  <form class="auth-card" data-submit="logIn">
+    <h1 class="auth-title">Planfarm Elevate</h1>
+    <p class="auth-sub">Coaching Dashboard</p>
+    <label class="auth-label" for="login-email">Email</label>
+    <input class="form-input" id="login-email" type="email" autocomplete="username" required>
+    <label class="auth-label" for="login-password">Password</label>
+    <input class="form-input" id="login-password" type="password" autocomplete="current-password" required>
+    <p id="login-error" class="auth-error" hidden></p>
+    <button class="btn btn-teal" type="submit" id="login-button">Log in</button>
+  </form>
+</div>
+
+<div id="business-picker" class="auth-screen" hidden>
+  <div class="auth-card">
+    <h1 class="auth-title">Choose a business</h1>
+    <p id="business-picker-user" class="auth-sub"></p>
+    <ul id="business-list" class="business-list"></ul>
+    <p id="business-picker-message" class="auth-error" hidden></p>
+    <button class="btn btn-ghost" type="button" data-click="signOut">Sign out</button>
+  </div>
+</div>
+
+<div id="config-error" class="auth-screen" hidden>
+  <div class="auth-card">
+    <h1 class="auth-title">Not connected</h1>
+    <p class="auth-sub">This copy of the dashboard has no Supabase settings (VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY), so it can't load any data.</p>
+  </div>
+</div>
+
+<div id="dashboard">
 <div class="header">
   <div class="header-inner">
     <div class="logo-area">
@@ -27,6 +59,8 @@
       <button data-click="exportData" class="header-btn">Export Data</button>
       <label class="header-btn">Import Data<input type="file" accept=".json" data-change="importData" style="display:none"></label>
       <button data-click="printAll" class="header-btn">🖨 Print</button>
+      <button data-click="switchBusiness" class="header-btn" id="switch-business-btn" hidden>Switch business</button>
+      <button data-click="signOut" class="header-btn" id="sign-out-btn" hidden>Sign out</button>
       <div id="last-updated-display" style="font-size:11px;color:rgba(255,255,255,0.65);text-align:right;line-height:1.4;margin-right:4px;"></div>
       <div class="header-client">
         <h1>Client Name</h1>
@@ -166,6 +200,7 @@
   </div>
 
 </div>
+</div><!-- #dashboard -->
 
 <!-- New 120-Day Period Modal -->
 <div id="modal-120-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;">

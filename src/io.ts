@@ -3,14 +3,8 @@
 
 import type { Actions } from './actions.ts';
 import { persistence, type ImportedData } from './persistence.ts';
-import { migrateOneYear, renderBlueprint } from './sections/blueprint.ts';
-import { renderIssues } from './sections/issues.ts';
-import { render120Periods } from './sections/periods120.ts';
-import { render30 } from './sections/rounds30.ts';
-import { renderSessions } from './sections/sessions.ts';
+import { renderAll } from './render.ts';
 import { state } from './state.ts';
-import { updateStats } from './stats.ts';
-import { updateLastUpdatedDisplay } from './storage.ts';
 import type { ExportFile } from './types.ts';
 import { showToast } from './ui.ts';
 
@@ -38,8 +32,13 @@ function importData(event: Event): void {
     try { data = JSON.parse(String(reader.result)) as ImportedData; } catch { alert('Could not read file.'); return; }
     if (!data.version || !data.blueprint) { alert('Not a valid Planfarm data file.'); return; }
     if (!confirm('This will replace all current data. Continue?')) return;
-    await persistence().importData(data);
-    migrateOneYear(); renderBlueprint(); render120Periods(); render30(); renderSessions(); renderIssues(); updateStats(); updateLastUpdatedDisplay();
+    try {
+      await persistence().importData(data);
+    } catch (err) {
+      alert(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
+      return;
+    }
+    renderAll();
     showToast('Data imported successfully');
   };
   reader.readAsText(file); input.value = '';

@@ -7,6 +7,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import indexHtml from '../index.html?raw';
+import { $, $$, act, pageBody, setValue, value } from './helpers.ts';
 
 const STORAGE_KEY = 'pf_elevate_blank1';
 
@@ -87,11 +88,6 @@ function fixture(overrides: Partial<Saved> = {}): Saved {
 
 // ---- Helpers ----
 
-function pageBody(): string {
-  const body = /<body[^>]*>([\s\S]*)<\/body>/i.exec(indexHtml)?.[1] ?? '';
-  return body.replace(/<script[\s\S]*?<\/script>/gi, '');
-}
-
 /** Run startup exactly as the browser does, optionally with data already saved. */
 async function startApp(savedData?: Saved): Promise<void> {
   if (savedData) localStorage.setItem(STORAGE_KEY, JSON.stringify(savedData));
@@ -103,40 +99,6 @@ function saved(): Saved {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) throw new Error('Nothing has been saved');
   return JSON.parse(raw) as Saved;
-}
-
-function $(selector: string): HTMLElement {
-  const el = document.querySelector<HTMLElement>(selector);
-  if (!el) throw new Error(`No element matches ${selector}`);
-  return el;
-}
-
-function $$(selector: string): HTMLElement[] {
-  return Array.from(document.querySelectorAll<HTMLElement>(selector));
-}
-
-function value(selector: string): string {
-  return ($(selector) as HTMLInputElement | HTMLTextAreaElement).value;
-}
-
-function setValue(selector: string, text: string): void {
-  ($(selector) as HTMLInputElement | HTMLTextAreaElement).value = text;
-}
-
-/** The attribute behind a dataset-style key: 'periodId' → 'data-period-id'. */
-function dataAttr(key: string): string {
-  return 'data-' + key.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());
-}
-
-/**
- * Do what a user does to the element whose data-<type> attribute names `action` and whose other
- * data-* attributes match `data`: dispatch a real, bubbling DOM event. The page's delegated
- * listener (src/actions.ts) handles it, exactly as in the browser.
- */
-function act(action: string, data: Record<string, string | number> = {}, type: 'click' | 'input' | 'change' = 'click'): void {
-  const selector = `[data-${type}="${action}"]` + Object.entries(data).map(([key, value]) => `[${dataAttr(key)}="${value}"]`).join('');
-  const event = type === 'click' ? new MouseEvent('click', { bubbles: true, cancelable: true }) : new Event(type, { bubbles: true });
-  $(selector).dispatchEvent(event);
 }
 
 /** Fill the shared edit dialog (#edit-overlay) and press Save. */
@@ -255,9 +217,11 @@ function importFile(file: File): void {
   input.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-/** Every action named in data-click / data-input / data-change attributes in `text`. */
+/** Every action named in data-click/input/change/submit attributes (or set via el.dataset.click = '…') in `text`. */
 function actionNames(text: string): Set<string> {
-  return new Set([...text.matchAll(/\bdata-(?:click|input|change)="([A-Za-z0-9_]+)"/g)].map((m) => m[1]));
+  const attributes = [...text.matchAll(/\bdata-(?:click|input|change|submit)="([A-Za-z0-9_]+)"/g)];
+  const assigned = [...text.matchAll(/\bdataset\.(?:click|input|change|submit)\s*=\s*'([A-Za-z0-9_]+)'/g)];
+  return new Set([...attributes, ...assigned].map((m) => m[1]));
 }
 
 /** The page's markup and source as text: index.html plus every .ts file under src/. */
@@ -818,7 +782,7 @@ describe('drag and drop', () => {
 });
 
 describe('event delegation', () => {
-  it('has an action for every data-click / data-input / data-change in the markup, and no unused ones', async () => {
+  it('has an action for every data-click / data-input / data-change / data-submit in the markup, and no unused ones', async () => {
     const used = new Set<string>();
     for (const text of markupAndSources()) {
       for (const name of actionNames(text)) used.add(name);

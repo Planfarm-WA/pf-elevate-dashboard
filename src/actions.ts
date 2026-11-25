@@ -3,16 +3,16 @@
 //
 //   <button data-click="setStatus120" data-period-id="1750000000000" data-item-id="1" data-status="on-track">
 //
-// data-click / data-input / data-change name the action for that event. Any other data-*
+// data-click / data-input / data-change / data-submit name the action for that event. Any other data-*
 // attributes are its arguments, read with num() and oneOf() below. Each module exports its
 // actions next to the markup that uses them; main.ts merges and installs them.
 
-/** Runs for an event on `el`, the element carrying the data-click/data-input/data-change attribute. */
+/** Runs for an event on `el`, the element carrying the data-click/input/change/submit attribute. */
 export type Action = (el: HTMLElement, event: Event) => void;
 export type Actions = Record<string, Action>;
 
 /** The events that can be delegated: the data-<event> attributes that are understood. */
-export const ACTION_EVENTS = ['click', 'input', 'change'] as const;
+export const ACTION_EVENTS = ['click', 'input', 'change', 'submit'] as const;
 
 /** Combine the modules' actions. Throws if two modules register the same name. */
 export function mergeActions(...groups: Actions[]): Actions {
