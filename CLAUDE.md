@@ -11,11 +11,23 @@ The Planfarm Elevate coaching dashboard, built and served by Vite:
 
 ```
 src/
-  main.ts           startup: loadSaved → backdrop click listeners → render every tab → install actions
-  actions.ts        event delegation: installActions(), mergeActions(), num(), oneOf()
+  main.ts           entry: startApp(appModeFromEnv()); exports `ready` (the tests await it) and `actions`
+  config.ts         appModeFromEnv(): local / Supabase / missing-config, from VITE_SUPABASE_* (see "Modes")
+  app.ts            startApp(mode): backdrop listeners, installActions(), then the mode's startup; the merged `actions`
+  session.ts        Supabase mode: login form, business list, open/switch/sign out, header save status, Who suggestions
+  render.ts         renderAll(): every tab from `state`
+  persistence.ts    the Persistence interface (load / changed / importData), usePersistence(), and save()
+  storage.ts        localPersistence: the whole state as JSON in localStorage key pf_elevate_blank1
+  supabase-persistence.ts  createSupabasePersistence(): load one business, sync changes (sync.ts)
+  sync.ts           diff(lastSaved, next) → ops, and createSyncer(): debounce, apply, retry, save status
+  rows.ts           stateToRows() / rowsToState(): `state` ⇄ one business's rows (Snapshot)
+  backend.ts        Backend interface + supabaseBackend(db): auth, list/load businesses, apply ops, import
+  supabase.ts       createDb(): the typed browser client (keeps the session in localStorage)
+  env.d.ts          types for VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY
+  ids.ts            newId() (crypto.randomUUID), stringifyIds() for older numeric data
+  actions.ts        event delegation: installActions(), mergeActions(), num(), str(), oneOf()
   types.ts          the saved data: State, Period120, Round30, Item, Session, Blueprint, ExportFile, …, plus STATUSES
-  state.ts          `state`, the single shared object
-  storage.ts        save(), loadSaved(), updateLastUpdatedDisplay(); localStorage key pf_elevate_blank1
+  state.ts          `state`, the single shared object, and emptyState()
   dom.ts            byId<T>(): typed getElementById that throws "Missing element #id"
   ui.ts             showToast(), playBing(), badgeFor()
   stats.ts          updateStats() (the hidden #stat-* divs)
@@ -32,9 +44,7 @@ scripts/
   import-dashboard.ts  `pnpm import-dashboard`: loads an export file into one business (runs in Node)
 ```
 
-The page doesn't use `adapters.ts`, `importer.ts` or supabase-js yet. Only the import script does, until the Supabase switch.
-
-It is a blank per-client template: the header `<h1>Client Name</h1>` and the "Who" suggestions (`<datalist id="who-suggestions">`) in `index.html` are placeholders edited for each client.
+In Supabase mode the header's `<h1>` shows the open business's name, and the "Who" suggestions (`<datalist id="who-suggestions">`) are filled from the names used in that business. The `Client Name` and `Person A…` placeholders in `index.html` only show in local mode.
 
 Commands:
 - `pnpm dev`: dev server at `http://localhost:5173`, reloads on save.
@@ -44,7 +54,13 @@ Commands:
 - `pnpm lint`: ESLint with typescript-eslint on `src/`, `tests/` and `scripts/`. The config is in `eslint.config.js`.
 - `pnpm gen:types`: regenerates `src/database.types.ts` from the local Supabase schema. Run it after every migration, with the local stack up.
 - `pnpm import-dashboard "<business name or id>" <file.json>`: see "Importing export files" below.
-- `pnpm test`: Vitest. `tests/adapters.test.ts` checks the export → rows mapping against `tests/fixtures/export-v3.json`. The smoke tests are in `tests/dashboard.test.ts`. They run in jsdom, a browser imitation in Node.js. Each test loads the `index.html` body, runs `src/main.ts` the way the browser does, then drives the page like a user. `act()` finds an element by its `data-click`/`data-input`/`data-change` attribute and dispatches a real DOM event, which goes through the same delegated listener as in the browser. The tests check the page and the JSON saved in `localStorage`. They don't render anything: layout, real drag-and-drop, the print dialog and sound still need a browser.
+- `pnpm test`: Vitest.
+  - `tests/adapters.test.ts`: the export → rows mapping, against `tests/fixtures/export-v3.json`.
+  - `tests/rows.test.ts` and `tests/sync.test.ts`: the state ⇄ rows conversion, `diff()` and the syncer.
+  - `tests/supabase-mode.test.ts`: login, the business list, saving, retrying, import and sign-out, against the in-memory `tests/fake-backend.ts`.
+  - `tests/dashboard.test.ts`: the smoke tests in local mode (shared page helpers in `tests/helpers.ts`).
+
+  The page tests They run in jsdom, a browser imitation in Node.js. Each test loads the `index.html` body, runs `src/main.ts` the way the browser does, then drives the page like a user. `act()` finds an element by its `data-click`/`data-input`/`data-change`/`data-submit` attribute and dispatches a real DOM event, which goes through the same delegated listener as in the browser. The tests check the page and the JSON saved in `localStorage`. They don't render anything: layout, real drag-and-drop, the print dialog and sound still need a browser.
 
 There's no `vite.config.js`, because the defaults fit. Opening `index.html` straight from disk (`file://`) no longer works, because module scripts need a server. The only external resource is Google Fonts (DM Sans, Fraunces).
 
@@ -71,18 +87,33 @@ The "event delegation" tests fail if an attribute names an unregistered action, 
 
 The period and round tabs (`tab.onclick`/`tab.ondblclick`), drag-and-drop and the dialog backdrops attach their listeners in JS, which is fine because nothing is global.
 
-**`localStorage` is separate for each web address.** Data saved in a file-based copy, or at another address, doesn't appear at `localhost:5173`. Move it with Export/Import.
+**Modes** (`src/config.ts`, `src/app.ts`):
 
-`package.json` (pnpm) has one runtime dependency, `@supabase/supabase-js`, for the Supabase switch. The rest is dev tooling: Vite, TypeScript, ESLint (with typescript-eslint), Vitest with jsdom, tsx (this Ubuntu Node build can't run `.ts` files itself), `@types/node`, and the Supabase CLI. Run the Supabase CLI as `pnpm supabase <command>`, not bare `supabase`. pnpm blocks dependencies' install scripts unless `pnpm-workspace.yaml` (`allowBuilds`) allows them. esbuild's is set to `false`, because tsx works without it. A new dependency with an install script makes `pnpm add` fail with `ERR_PNPM_IGNORED_BUILDS` until it's listed there.
+| Mode | When | What happens |
+|---|---|---|
+| **Supabase** | `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` are set (not in tests) | Login form, then the business list (one business, or `?business=<id>`, opens directly), then the dashboard. Changes sync to Supabase |
+| **Local** | Vitest (`MODE === 'test'`), or `pnpm dev` without the variables | No login. The whole state lives in `localStorage` (`storage.ts`), which is separate for each web address |
+| **Missing config** | A production build without the variables | A "Not connected" page. It never quietly falls back to `localStorage` |
 
-`supabase/migrations/` holds the planned database schema. **The app does not use Supabase yet.** It still reads and writes `localStorage` only.
+**Saving in Supabase mode** (`supabase-persistence.ts`, `sync.ts`, `rows.ts`). The sections still just change `state` and call `save()`.
+- **Persistence.** `save()` hands the change to the active persistence. The Supabase one keeps `lastSaved`, the rows as last saved successfully. About 400 ms after the latest change, it compares `stateToRows(state)` with `lastSaved` in memory and writes only the differences through the `Backend`.
+- **How the comparison works.** Tables with ids (periods, priorities, rounds, tasks, sessions) are matched by id: new ids are inserts, rows whose fields changed are updates, and ids that are gone are deletes. The lists without ids (values, 3-year items, 1-year targets, issues, both queues) are replaced as a whole when they differ.
+- **Op order:** the blueprint, the lists, deletes (children first), periods and rounds turning `is_current` off, then those turning it on (the "one current per business" index), then priorities and tasks, then sessions.
+- **Failures.** A failure keeps `lastSaved` and retries with a growing wait. Every op can be repeated safely, so a partial write still converges.
+- **What the user sees.** The header shows "Saving…" / "Saved hh:mm" / "Not saved — retrying", and `beforeunload` warns while anything is pending.
+- **What's out of scope.** Two people editing the same row: the last write wins. There are no live updates (Realtime).
+- **Ids.** Ids are UUID strings from `newId()`, the same in the app and the database. Older saves and export files with numeric ids are converted by `stringifyIds()`.
+
+`package.json` (pnpm) has one runtime dependency, `@supabase/supabase-js`, which is bundled into the page (about 280 kB, 72 kB gzipped). The rest is dev tooling: Vite, TypeScript, ESLint (with typescript-eslint), Vitest with jsdom, tsx (this Ubuntu Node build can't run `.ts` files itself), `@types/node`, and the Supabase CLI. Run the Supabase CLI as `pnpm supabase <command>`, not bare `supabase`. pnpm blocks dependencies' install scripts unless `pnpm-workspace.yaml` (`allowBuilds`) allows them. esbuild's is set to `false`, because tsx works without it. A new dependency with an install script makes `pnpm add` fail with `ERR_PNPM_IGNORED_BUILDS` until it's listed there.
+
+`supabase/migrations/` holds the database schema. It's applied on the hosted project, and the deployed app reads and writes it.
 
 ## How the page works
 
-- **One shared `state` object** (`src/state.ts`: `periods120`, `rounds`, `sessions`, `blueprint`, `pendingPushes`, `pendingPushes120`, `lastUpdated`). Modules import it and change its properties. An imported binding can't be reassigned, but its properties can. Every change follows the same pattern: change `state`, call `save()` (which writes the whole object to `localStorage` key `pf_elevate_blank1` and stamps `lastUpdated`), then call the render function for that section.
+- **One shared `state` object** (`src/state.ts`: `periods120`, `rounds`, `sessions`, `blueprint`, `pendingPushes`, `pendingPushes120`, `lastUpdated`). Modules import it and change its properties. An imported binding can't be reassigned, but its properties can. Every change follows the same pattern: change `state`, call `save()` (`src/persistence.ts`, which hands the change to the active persistence: see "Saving in Supabase mode"), then call the render function for that section.
 - **Render functions rebuild `innerHTML` from `state`:** `renderBlueprint`, `renderOneYearTargets`, `renderThreeYearTargets`, `render120Periods` / `renderPeriodPriorities`, `render30` / `renderRoundTasks`, `renderSessions`, `renderIssues`. `showSection()` re-renders a tab when it is opened.
 - **Variables used by only one area stay private to its module**, for example `currentSessionId` in `sessions.ts`, `currentBpSection` in `blueprint.ts`, and `dragSrc` in `drag.ts`.
-- **IDs travel as `data-*` attributes** (see "Event handling" above) and are read back with `num()`. Periods and rounds use `Date.now()`; priorities and tasks use `Math.max(...ids)+1` within their parent. With Supabase UUIDs, the actions read them as strings instead, and no quoting is needed.
+- **IDs are UUID strings** (`newId()`). They travel as `data-*` attributes (see "Event handling" above) and are read back with `str()`. `num()` is for numbers such as list positions (`data-idx`) and dialog row numbers.
 - **User text goes into `innerHTML` and `value="..."` attributes without escaping.** A quote or `<` in user input can break the edit forms.
 - **Shared modals.** `#edit-overlay` serves many item types: adding, editing and renaming priorities, tasks, periods, rounds and 1-year targets.
   - Each opener calls `openEditModal(title, fieldsHtml, onSave)` (`src/edit-modal.ts`) and passes its own save logic.
@@ -156,17 +187,17 @@ Then run each migration in order, e.g. `psql -v ON_ERROR_STOP=1 -f supabase/migr
 
 ## To-do
 
-Roughly in order. The schema (`000_initial_schema.sql`) is applied on the hosted Supabase project, with a staff user. Client export files can be loaded with `pnpm import-dashboard`. The site is on Vercel, deployed from `main`, with build settings that work for the Vite code (confirmed 2026-11-25).
+Roughly in order.
+- The schema (`000_initial_schema.sql`) is applied on the hosted Supabase project, with a staff user, and client export files load with `pnpm import-dashboard`.
+- The app logs in and syncs to Supabase (the "Saving in Supabase mode" section above).
+- The site is on Vercel, deployed from `main`. Vercel needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` set for Production and Preview. Supabase Auth should have "Allow new users to sign up" turned off, because staff create the logins.
 
-1. **Switch the app to Supabase.**
-   - Add `src/db.ts` for the Supabase reads and writes. `src/adapters.ts` already converts export JSON → rows; add the other direction (rows → the types in `src/types.ts`), so the render functions keep working on `state`. The smoke tests in `tests/` should keep passing, with Supabase stubbed out.
-   - supabase-js and `src/database.types.ts` are already in place. Create the client as `createClient<Database>(...)`. Put `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in `.env.local` (local stack) and in Vercel's environment variables (hosted project). Never use a `VITE_` variable for the `service_role` key.
-   - The Import button reuses `parseExportFile()` + `importDashboard()`, the same code as `pnpm import-dashboard`.
-   - Add a login screen (staff or client). In Supabase Auth's URL configuration, allow `http://localhost:5173` and the Vercel URLs.
-   - Load one business's data.
-   - Replace the whole-state `save()` with row-level inserts, updates and deletes.
-   - IDs become UUIDs. They already travel as `data-*` strings, so switch the actions from `num()` to a string reader.
-   - Keep Export/Import working as a backup.
-2. **Escape user text** before it goes into `innerHTML` and `value="..."` attributes.
-3. **Session Notes card** (`addNote()`): either save the notes (which needs a table) or remove the card.
-4. **`periods120[].oneyear`:** either show it on the period panel or stop collecting it.
+1. **Escape user text** before it goes into `innerHTML` and `value="..."` attributes. A quote or `<` breaks the forms, and with shared data one user's text now reaches other users.
+2. **Per-business sign-up links**, so clients set their own password. This needs:
+   - an `invites` table plus a `security definer` function that links the new login to the business;
+   - a join page, and public sign-up turned back on;
+   - email sending (SMTP, e.g. Resend or Postmark) set up in Supabase Auth, together with a "forgot password" flow.
+3. **An admin screen for staff:** create businesses and see or remove client links. Creating logins needs the service-role key, so it must happen server-side (an Edge Function), never in the browser.
+4. **Session Notes card** (`addNote()`): either save the notes (which needs a table) or remove the card.
+5. **`periods120[].oneyear`:** either show it on the period panel or stop collecting it.
+6. **Maybe live updates** (Supabase Realtime), so a change on one device shows up on another without reloading. Today the last write wins per row.

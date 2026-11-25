@@ -14,22 +14,21 @@ Priorities and tasks have a status (On Track / Off Track / Complete), an owner a
 
 ## Using it
 
-The dashboard runs through [Vite](https://vite.dev), so it needs [Node.js](https://nodejs.org) and [pnpm](https://pnpm.io). From the repository folder:
+**Logging in.** Open the dashboard's web address and log in with the email and password Planfarm gave you.
+- **Clients** go straight into their farm's dashboard.
+- **Staff** see a list of businesses and pick one. **Switch business** in the header goes back to the list. A link with `?business=…` at the end opens that business directly.
+- **Sign out** is in the header.
 
-```sh
-pnpm install   # first time only
-pnpm dev       # then open http://localhost:5173
-```
+**Saving.** Every change saves itself to the database, so there's no Save button. Everyone who opens the business sees the same data, on any computer or phone. The header shows the save status:
+- **Saving…** while a change is on its way.
+- **Saved 14:32** once it's in the database.
+- **Not saved — retrying** if the connection dropped. Keep the page open and it tries again by itself. Closing the tab while something isn't saved yet shows a warning.
 
-`pnpm build` creates a `dist/` folder for hosting. Vercel is planned. Opening `index.html` straight from disk no longer works.
-
-Checks for developers: `pnpm test` runs the smoke tests, `pnpm lint` runs ESLint, and `pnpm typecheck` runs TypeScript.
-
-**Saving.** Changes save automatically in the browser you're using. They are not shared with anyone else, and don't move to another computer or browser by themselves. Clearing the browser's site data deletes them. The browser also keeps data separately for each web address. Data from an older copy you opened as a file, or from a different address, won't appear here until you move it with Export and Import.
+If two people edit the *same* item at the same moment, the last change wins. Changes made on another device show up when you reload the page.
 
 **Backing up and moving data.**
-- **Export Data** downloads a `planfarm-elevate-dashboard-YYYY-MM-DD.json` file. Keep it as a backup, or use it to open the dashboard on another computer.
-- **Import Data** loads one of those files. It **replaces everything** currently in the dashboard.
+- **Export Data** downloads a `planfarm-elevate-dashboard-YYYY-MM-DD.json` file of the open business. Keep it as a backup.
+- **Import Data** loads one of those files into the open business. It **replaces** that business's dashboard.
 
 **Carrying work forward.** "Push →" on an unfinished priority or task copies it into the next period or round. If that doesn't exist yet, the item is added automatically when you create it.
 
@@ -37,21 +36,54 @@ Checks for developers: `pnpm test` runs the smoke tests, `pnpm lint` runs ESLint
 
 **Known gap.** Notes typed into the *Session Notes* card are not saved. Use the coaching notes box on each 30-day round, or the Notes field on a session, instead.
 
-### Setting up for a new client
+### Adding a client (staff)
 
-The plan is one hosted dashboard for every client business, with logins and data in Supabase (see below), so there won't be a copy per client.
+1. **Create their business** in the Supabase **SQL Editor**:
+   ```sql
+   insert into public.businesses (name) values ('ABC Holdings');
+   ```
+   Its blueprint is created automatically.
+2. **Create their login** under **Authentication → Users → Add user**. Enter their email and a password, and tick **Auto Confirm User**. Send them the password safely, for example by phone or text, not in the same email as the address.
+3. **Link the login to the business** in the SQL Editor:
+   ```sql
+   insert into public.clients (business_id, user_id)
+   select b.id, u.id
+   from public.businesses b, auth.users u
+   where b.name = 'ABC Holdings' and u.email = 'client@example.com';
+   ```
+   It should say `INSERT 0 1`. `INSERT 0 0` means the name or the email didn't match.
+4. **Load their old dashboard file**, if they have one. Open the business in the dashboard and use **Import Data**, or see "Importing a client's export file" below.
 
-Until that's live, a copy that opens straight from disk can be made from commit `4e83369`, the last file-based version:
+Sign-up links per business, so clients can set their own password, are planned. So is a "forgot password" email.
+
+## Running it on your computer (developers)
+
+The dashboard is built with [Vite](https://vite.dev), so it needs [Node.js](https://nodejs.org) and [pnpm](https://pnpm.io). From the repository folder:
 
 ```sh
-mkdir ../client-copy && git archive 4e83369 index.html css js | tar -x -C ../client-copy
+pnpm install   # first time only
+pnpm dev       # then open http://localhost:5173
 ```
 
-In the copy, replace `Client Name` in the header of `index.html` with the client's name, and the placeholder names in the "Who" suggestions (`Person A`, `Person B`, …) near the end of the file. The browser stores data under a fixed name (`pf_elevate_blank1`, set in `js/app.js`), so copies opened from the same place share it. Give each client's copy its own storage name if one browser is used for several clients.
+**Which data it uses** depends on two environment variables:
+- **Without them,** `pnpm dev` runs in **local mode**: no login, and the data stays in that browser only, like the old file-based dashboard.
+- **With them,** it logs in to Supabase. To work against the **local** Supabase (in Docker, with throwaway data):
+  ```sh
+  pnpm supabase start
+  pnpm supabase status                 # shows the local API URL and publishable key
+  export VITE_SUPABASE_URL=http://127.0.0.1:54321
+  export VITE_SUPABASE_PUBLISHABLE_KEY=<the local publishable key>
+  pnpm dev
+  ```
+  The hosted project's values work too, but then you're editing real client data.
 
-## Supabase database (in progress)
+`pnpm build` creates the `dist/` folder that Vercel serves. Opening `index.html` straight from disk doesn't work.
 
-The dashboard is moving from browser storage to Supabase, so data is shared and backed up centrally. The files in `supabase/migrations/` create the tables. **The dashboard does not use them yet.**
+Checks for developers: `pnpm test` runs the tests, `pnpm lint` runs ESLint, and `pnpm typecheck` runs TypeScript.
+
+## Supabase database
+
+The dashboard keeps its data in Supabase, so it's shared and backed up centrally. The files in `supabase/migrations/` create the tables.
 
 ### Creating the tables
 
@@ -117,21 +149,30 @@ pnpm import-dashboard "ABC Holdings" ~/Downloads/planfarm-elevate-dashboard-2026
 - **If it stops halfway** (for example the connection drops), the message says where. Run the same command again: it replaces everything, so a second run finishes the job.
 - **Who can import where.** Staff can import into any business. A client login can only import into its own business.
 
+### Deploying (Vercel)
+
+The site is deployed on Vercel from the `main` branch. Every other pushed branch gets its own preview address.
+- **Vercel → Settings → Environment Variables** needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` for both Production and Preview. Without them, the page shows "Not connected" instead of quietly using browser storage.
+- **Supabase → Authentication → Sign In / Providers:** keep **Email** on, and turn **"Allow new users to sign up"** off, because logins are created by staff.
+
 ### Still to do
 
-- Changing the dashboard to read and save through Supabase instead of the browser.
+- Sign-up links per business, plus email sending (SMTP) and "forgot password".
+- An admin screen for staff to create businesses and manage client logins.
+- Possibly live updates, so a change on one device shows up on another without reloading.
 
 ## Repository layout
 
 ```
 index.html            The dashboard page (markup); Vite's entry point
 src/styles.css        Styles for the page
-src/main.ts           The code's entry point: loads the data and draws every tab
+src/main.ts           The code's entry point: picks the mode (local or Supabase) and starts the app
 src/sections/         One module per tab (blueprint, issues, 120-day, 30-day, sessions)
-src/*.ts              Shared modules: data types and state, saving, dialogs, export/import, printing,
-                      and the export → database import (adapters.ts, importer.ts)
+src/*.ts              Shared modules: data types and state, login and businesses, saving (local or
+                      Supabase sync), dialogs, export/import, printing, and the export → database import
 scripts/              Command-line tools run with Node (`pnpm import-dashboard`)
-tests/                Tests (`pnpm test`): smoke tests in a simulated browser, and the import mapping
+tests/                Tests (`pnpm test`): the page in a simulated browser (local and Supabase mode,
+                      against an in-memory backend), the import mapping, and the sync
 tsconfig.json         TypeScript settings (`pnpm typecheck`)
 eslint.config.js      Lint rules (`pnpm lint`)
 supabase/migrations/  Database tables and access rules for Supabase (CLI migrations)
