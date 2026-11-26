@@ -320,8 +320,16 @@ isOneToOne: false
             "can_access_business":
 { Args: { "p_business_id": string }; Returns: boolean
                            },
+"client_logins":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "business_id": string,"email": string,"linked_at": string,"user_id": string
+            }[]
+                           },
 "is_staff":
 { Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"link_client":
+{ Args: { "p_business_id": string,"p_email": string }; Returns: undefined
                            }
           }
           Enums: {

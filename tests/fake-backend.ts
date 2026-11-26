@@ -36,9 +36,13 @@ export function createFakeBackend(options: FakeOptions) {
   let user = options.signedIn ?? null;
   const businesses = new Map(options.businesses.map((b) => [b.id, {
     name: b.name,
-    clients: b.clients ?? [],
+    clients: [...(b.clients ?? [])],
     rows: structuredClone(b.rows ?? stateToRows(emptyState())),
   }]));
+  let created = 0;
+  const isStaffNow = () => !!user && (options.staff ?? []).includes(user);
+  /** A login's id. Unlike the email, so a screen that mixes them up fails its tests. */
+  const userId = (email: string) => `user-${email}`;
   const applied: Op[][] = [];
   const loaded: string[] = [];
   let failures = 0;
@@ -126,6 +130,42 @@ export function createFakeBackend(options: FakeOptions) {
       const b = businesses.get(id);
       if (b) b.rows = stateToRows(s);
     },
+
+    // The staff admin screen, with the database's messages (001_staff_admin.sql and RLS).
+    async isStaff() { return isStaffNow(); },
+    async createBusiness(name) {
+      if (!isStaffNow()) throw new Error('Adding the business: new row violates row-level security policy for table "businesses"');
+      const id = `new-${++created}`;
+      businesses.set(id, { name, clients: [], rows: stateToRows(emptyState()) });
+      return { id, name };
+    },
+    async renameBusiness(id, name) {
+      const b = businesses.get(id);
+      if (!b || !isStaffNow()) throw new Error('This business no longer exists, or your login cannot change it.');
+      b.name = name;
+    },
+    async deleteBusiness(id) {
+      if (!businesses.has(id) || !isStaffNow()) throw new Error('This business no longer exists, or your login cannot delete it.');
+      businesses.delete(id);
+    },
+    async listClientLogins() {
+      if (!isStaffNow()) throw new Error('Loading the client logins: Only Planfarm staff can see client logins.');
+      return [...businesses.entries()]
+        .flatMap(([businessId, b]) => b.clients.map((email) => ({ businessId, userId: userId(email), email })))
+        .sort((a, b) => a.businessId.localeCompare(b.businessId) || a.email.localeCompare(b.email));
+    },
+    async linkClient(businessId, email) {
+      if (!isStaffNow()) throw new Error('Only Planfarm staff can link client logins.');
+      const b = businesses.get(businessId);
+      if (!b) throw new Error('This business no longer exists.');
+      const login = Object.keys(options.users).find((e) => e.toLowerCase() === email.trim().toLowerCase());
+      if (!login) throw new Error(`There is no login with the email ${email.trim()}. Create it in Supabase first (Authentication → Users → Add user), then link it here.`);
+      if (!b.clients.includes(login)) b.clients.push(login);
+    },
+    async unlinkClient(businessId, id) {
+      const b = businesses.get(businessId);
+      if (b && isStaffNow()) b.clients = b.clients.filter((email) => userId(email) !== id);
+    },
   };
 
   return {
@@ -150,6 +190,8 @@ export function createFakeBackend(options: FakeOptions) {
     },
     /** Delete a business (its rows and client links go with it). */
     removeBusiness: (id: string) => { businesses.delete(id); },
+    /** The businesses "the database" holds, with their client logins' emails. */
+    businesses: () => [...businesses.entries()].map(([id, b]) => ({ id, name: b.name, clients: [...b.clients] })),
     /** Make the next `count` loadBusiness() calls fail, as when offline. */
     failNextLoad: (count = 1) => { loadFailures = count; },
     /** Hold the next loadBusiness() answer (read at request time) until the returned function runs. */

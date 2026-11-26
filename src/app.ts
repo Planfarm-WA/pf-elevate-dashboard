@@ -2,6 +2,7 @@
 // the tests call startApp() directly (with a fake backend for Supabase mode).
 
 import { installActions, mergeActions } from './actions.ts';
+import { adminActions } from './admin.ts';
 import type { Backend } from './backend.ts';
 import { byId } from './dom.ts';
 import { closeEditModal, editModalActions } from './edit-modal.ts';
@@ -34,7 +35,7 @@ export type AppMode =
 // exports its actions; a name registered twice throws here. Exported so the tests can check them.
 export const actions = mergeActions(
   editModalActions, ioActions, navigationActions, printActions,
-  blueprintActions, periods120Actions, rounds30Actions, sessionsActions, sessionActions,
+  blueprintActions, periods120Actions, rounds30Actions, sessionsActions, sessionActions, adminActions,
 );
 
 export async function startApp(mode: AppMode): Promise<void> {

@@ -29,7 +29,23 @@
     <p id="business-picker-user" class="auth-sub"></p>
     <ul id="business-list" class="business-list"></ul>
     <p id="business-picker-message" class="auth-error" hidden></p>
+    <button class="btn btn-teal" type="button" id="manage-businesses-btn" data-click="manageBusinesses" hidden>Manage businesses</button>
     <button class="btn btn-ghost" type="button" data-click="signOut">Sign out</button>
+  </div>
+</div>
+
+<!-- Supabase mode, staff only: businesses and their client logins (src/admin.ts) -->
+<div id="admin" class="auth-screen admin-screen" hidden>
+  <div class="auth-card admin-card">
+    <h1 class="auth-title">Manage businesses</h1>
+    <p class="auth-sub">Add, rename or delete businesses, and choose which logins can open each one. Create a login in Supabase first (Authentication → Users → Add user), then link it here by its email.</p>
+    <form class="admin-row" data-submit="createBusiness">
+      <input class="form-input" id="new-business-name" placeholder="New business name" aria-label="New business name" autocomplete="off">
+      <button class="btn btn-lime" type="submit">Add business</button>
+    </form>
+    <p id="admin-message" class="auth-error" role="alert" hidden></p>
+    <div id="admin-list" class="admin-list"></div>
+    <button class="btn btn-ghost" type="button" data-click="backToBusinesses">Back to businesses</button>
   </div>
 </div>
 

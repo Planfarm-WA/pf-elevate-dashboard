@@ -10,3 +10,10 @@ export function byId<T extends HTMLElement = HTMLElement>(id: string): T {
   if (!el) throw new Error(`Missing element #${id}`);
   return el as T;
 }
+
+/** Put `text` in a message element (as text, never HTML), and hide the element when it's empty. */
+export function showMessage(id: string, text: string): void {
+  const el = byId(id);
+  el.textContent = text;
+  el.hidden = !text;
+}

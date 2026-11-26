@@ -14,7 +14,8 @@ src/
   main.ts           entry: startApp(appModeFromEnv()); exports `ready` (the tests await it) and `actions`
   config.ts         appModeFromEnv(): local / Supabase / missing-config, from VITE_SUPABASE_* (see "Modes")
   app.ts            startApp(mode): backdrop listeners, installActions(), then the mode's startup; the merged `actions`
-  session.ts        Supabase mode: login form, business list, open/switch/sign out, header save status, Who suggestions, reloadOpenBusiness()
+  session.ts        Supabase mode: login form, business list (staff flag), open/switch/sign out, header save status, Who suggestions, reloadOpenBusiness()
+  admin.ts          Supabase mode, staff only: the Manage businesses screen (#admin): add/rename/delete businesses, link/remove client logins
   live-updates.ts   Supabase mode: when to reload the open business (tab shown again, back online, every minute) and userIsBusy()
   render.ts         renderAll(): every tab from `state`
   persistence.ts    the Persistence interface (load / changed / importData), usePersistence(), and save()
@@ -22,14 +23,14 @@ src/
   supabase-persistence.ts  createSupabasePersistence(): load one business, sync changes (sync.ts), refresh() it, close() when it's left
   sync.ts           diff(lastSaved, next) → ops, and createSyncer(): debounce, apply, retry, save status, matchesSaved(), stop()
   rows.ts           stateToRows() / rowsToState(): `state` ⇄ one business's rows (Snapshot)
-  backend.ts        Backend interface + supabaseBackend(db): auth, list/load businesses, apply ops, import
+  backend.ts        Backend interface + supabaseBackend(db): auth, list/load businesses, apply ops, import, staff check and the admin screen's calls
   supabase.ts       createDb(): the typed browser client (keeps the session in localStorage)
   env.d.ts          types for VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY
   ids.ts            newId() (crypto.randomUUID), stringifyIds() for older numeric data
   actions.ts        event delegation: installActions(), mergeActions(), num(), str(), oneOf()
   types.ts          the saved data: State, Period120, Round30, Item, Session, Blueprint, ExportFile, …, plus STATUSES
   state.ts          `state`, the single shared object, and emptyState()
-  dom.ts            byId<T>(): typed getElementById that throws "Missing element #id"
+  dom.ts            byId<T>(): typed getElementById that throws "Missing element #id"; showMessage()
   html.ts           esc(): escapes text for the HTML template strings (see "How the page works")
   ui.ts             showToast(), playBing(), badgeFor()
   stats.ts          updateStats() (the hidden #stat-* divs)
@@ -54,7 +55,7 @@ Commands:
 - `pnpm preview`: serves `dist/`.
 - `pnpm typecheck`: `tsc` with `tsconfig.json` (`src/`, `tests/`, browser types), then `tsc -p scripts` (`scripts/` with Node types). It checks types and writes no files.
 - `pnpm lint`: ESLint with typescript-eslint on `src/`, `tests/` and `scripts/`. The config is in `eslint.config.js`.
-- `pnpm gen:types`: regenerates `src/database.types.ts` from the local Supabase schema. Run it after every migration, with the local stack up.
+- `pnpm gen:types`: regenerates `src/database.types.ts` from the local Supabase schema. Run it after every migration, with the local stack up and the migration applied there (`pnpm supabase migration up`). If the CLI fails, its `>` leaves the file empty: restore it with `git checkout src/database.types.ts`.
 - `pnpm import-dashboard "<business name or id>" <file.json>`: see "Importing export files" below.
 - `pnpm test`: Vitest.
   - `tests/adapters.test.ts`: the export → rows mapping, against `tests/fixtures/export-v3.json`.
@@ -85,6 +86,8 @@ There's no `vite.config.js`, because the defaults fit. Opening `index.html` stra
 1. Give the element `data-click="myAction"`, plus `data-*` attributes for its arguments.
 2. Add `myAction: (el) => myAction(num(el, 'periodId'))` to that module's actions. `num()` and `oneOf()` check the attribute and throw if it's wrong.
 
+For elements built with `createElement` (as in `admin.ts` and `session.ts`), write the action name literally, e.g. `form.dataset.submit = 'linkClient'`. The event-delegation test finds names only in that form or in `data-…="…"` attributes.
+
 The "event delegation" tests fail if an attribute names an unregistered action, if an action is never used, or if an inline `on*="…"` attribute comes back.
 
 The period and round tabs (`tab.onclick`/`tab.ondblclick`), drag-and-drop, the dialog backdrops and the live updates (`visibilitychange`, `online`) attach their listeners in JS, which is fine because nothing is global.
@@ -93,7 +96,7 @@ The period and round tabs (`tab.onclick`/`tab.ondblclick`), drag-and-drop, the d
 
 | Mode | When | What happens |
 |---|---|---|
-| **Supabase** | `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` are set (not in tests) | Login form, then the business list (one business, or `?business=<id>`, opens directly), then the dashboard. Changes sync to Supabase |
+| **Supabase** | `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` are set (not in tests) | Login form, then the business list, then the dashboard. `?business=<id>` opens that business directly, and so does a client's only business. Staff always get the list, which has Manage businesses. Changes sync to Supabase |
 | **Local** | Vitest (`MODE === 'test'`), or `pnpm dev` without the variables | No login. The whole state lives in `localStorage` (`storage.ts`), which is separate for each web address |
 | **Missing config** | A production build without the variables, or (in any build) values supabase-js rejects, such as a URL without `https://` | A "Not connected" page, showing supabase-js's error when a value was rejected. It never quietly falls back to `localStorage` |
 
@@ -157,9 +160,16 @@ The period and round tabs (`tab.onclick`/`tab.ondblclick`), drag-and-drop, the d
 
 ## Supabase schema (`supabase/migrations/`)
 
-Supabase CLI migrations. `000_initial_schema.sql` creates everything, wrapped in a single transaction. Apply with `pnpm supabase db push`, which records each migration as applied. `supabase/config.toml` (from `supabase init`) is the CLI's project config; a new checkout only needs `pnpm install` and `pnpm supabase link --project-ref <ref>`.
+Supabase CLI migrations:
+- `000_initial_schema.sql` creates everything, wrapped in a single transaction.
+- `001_staff_admin.sql` adds the two staff-only functions behind Manage businesses (see Access below).
 
-- **Migrations:** until the initial migration has been run on the real project, edit it in place. After that, never edit an applied migration. Put each change in a new file (`pnpm supabase migration new <name>`).
+`supabase/config.toml` (from `supabase init`) is the CLI's project config; a new checkout only needs `pnpm install` and `pnpm supabase link --project-ref <ref>`.
+
+- **Applying:** to the hosted project, run `pnpm supabase db push --remote`, which records each migration as applied (`pnpm supabase migration list --remote` shows them).
+  - The installed CLI (3.x) targets the **local** stack unless `--remote` is given, for `db push`, `migration up`, `migration list` and `gen types` alike.
+  - A migration pasted into the SQL Editor isn't recorded: `pnpm supabase migration repair <version> --status applied --remote`.
+- **Migrations:** never edit one that's applied. Put each change in a new numbered file, created by hand: `002_<name>.sql` and so on. `pnpm supabase migration new` would use a timestamp instead.
 
 - **Naming:** a farm business is a row in `businesses`; a "client" is a login that belongs to a business (a row in `clients`, linking `business_id` to `auth.users`). In `index.html` and the README's per-copy setup, "client" still means the farm itself.
 - **Structure:** everything belongs to a business via `business_id`. Most tables reference `businesses (id)`. The Blueprint lists (`core_values`, `three_year_items`, `one_year_targets`) reference `blueprints (business_id)` instead, so deleting a blueprint clears them. `issues` stays under `businesses`, because it has its own tab. The `create_blueprint` trigger inserts an empty `blueprints` row for each new business, so list inserts never lack a parent: update the blueprint, never insert one. Each JSON list becomes a table with a `sort_order` column.
@@ -171,6 +181,17 @@ Supabase CLI migrations. `000_initial_schema.sql` creates everything, wrapped in
   - Free-text dates (`by_when`, `period`, `session_date`) stay `text`, because the app accepts "TBC".
   - A partial unique index on `is_current` allows one current period/round per business.
 - **Access (RLS).** `staff` rows can access every business. `clients` rows can read **and edit** their own business(es). Edit access was confirmed on 2026-11-25. View-only would mean splitting the `"Business access"` policies into separate select and write policies. `anon` gets nothing. The checks are the `security definer` helpers `is_staff()` and `can_access_business(business_id)`. `priorities_120` and `tasks_30` have no `business_id` and resolve it through their parent period/round.
+  - **Staff admin (`001`).** RLS already lets staff insert, update and delete `businesses` and `clients`, so the admin screen does those through the tables. Only reading `auth.users` needs `security definer` functions, which raise `insufficient_privilege` for non-staff:
+    - `client_logins()`: every link, with the login's email;
+    - `link_client(business_id, email)`: finds the login by email, ignoring case; clear errors; linking twice does nothing.
+
+    `supabase/checks/staff_admin.sql` checks all of this as staff, a client and anon.
+- **Adding a function:**
+  - `security definer set search_path = ''`, and qualify every name (`public.…`, `auth.…`);
+  - check `public.is_staff()` (or `can_access_business`) first;
+  - in `returns table`, qualify the columns, because the output names are variables too, and cast `varchar` columns such as `auth.users.email` to `text`;
+  - `revoke execute … from public, anon` (Supabase's default privileges let anon run new functions in `public`) and `grant execute … to authenticated`;
+  - then `pnpm gen:types`.
 - **Adding a table:** enable RLS, add a `can_access_business` policy, add it to the `revoke all ... from anon, authenticated` list (Supabase's defaults grant both roles everything, including `TRUNCATE`, which bypasses RLS) and to the `grant select, insert, update, delete ... to authenticated` list, and add the `set_updated_at` trigger if the table has `updated_at`.
 
 To check schema changes without a Supabase project, run the script against a throwaway local Postgres. First create a stub of what Supabase provides:
@@ -187,6 +208,12 @@ grant execute on function auth.uid() to anon, authenticated;
 ```
 
 Then run each migration in order, e.g. `psql -v ON_ERROR_STOP=1 -f supabase/migrations/000_initial_schema.sql`. To test RLS as a user, use `set role authenticated; set request.jwt.claim.sub = '<user uuid>';`.
+
+With the local Supabase stack (`pnpm supabase start`), apply new migrations with `pnpm supabase migration up` (no reset, so local data stays). Then run the checks in `supabase/checks/`; each is one rolled-back transaction:
+
+```sh
+psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f supabase/checks/staff_admin.sql
+```
 
 ### Importing export files (`pnpm import-dashboard`)
 
@@ -219,14 +246,19 @@ Then run each migration in order, e.g. `psql -v ON_ERROR_STOP=1 -f supabase/migr
 - The Session Notes card, which never saved anything, is gone. Notes go in a session's Notes field or a round's notes box. Its markup, code, style and test are kept in `archive/session-notes-card.md`, with how to bring it back.
 - Period Targets (`periods120[].oneyear`) show on each period's card and can be edited (see "How the page works").
 - Live updates: the open business reloads when idle, so other devices' changes show up within a minute (see "Saving in Supabase mode").
+- Manage businesses (staff): add, rename and delete businesses, and link or remove client logins by email (`admin.ts`, `001_staff_admin.sql`). Logins are still created in the Supabase dashboard.
 
 **Still to do,** roughly in order. Production (`main`) still serves the old single-file site until the merge, the last item.
 
-1. **Per-business sign-up links**, so clients set their own password. This needs:
+1. **Apply `001_staff_admin.sql` to the hosted project** (the user's step). Until then, Manage businesses on the preview shows "Could not find the function".
+   1. `pnpm supabase migration list --remote`. If `000` isn't recorded (it was pasted in the SQL Editor), first run `pnpm supabase migration repair 000 --status applied --remote`.
+   2. `pnpm supabase db push --remote --dry-run`, then `pnpm supabase db push --remote`.
+2. **Per-business sign-up links**, so clients set their own password. This needs:
    - an `invites` table plus a `security definer` function that links the new login to the business;
    - a join page, and public sign-up turned back on;
    - email sending (SMTP, e.g. Resend or Postmark) set up in Supabase Auth, together with a "forgot password" flow.
-2. **An admin screen for staff:** create businesses and see or remove client links. Creating logins needs the service-role key, so it must happen server-side (an Edge Function), never in the browser.
+
+   Creating logins from the dashboard (e.g. on Manage businesses) needs the service-role key, so it must happen server-side (an Edge Function), never in the browser.
 3. **Maybe Supabase Realtime**, so changes from another device show up within a second instead of a minute. Subscribe to the business's tables and call `reloadOpenBusiness()`. This needs a migration adding the tables to the `supabase_realtime` publication. Delete events aren't filtered by business, and `priorities_120`/`tasks_30` have no `business_id` to filter on.
 4. **Merge `supabase-schema` into `main` (production).** Clients' current data is in their own browsers on the old site, so first:
    - give every client a login (README "Adding a client (staff)");

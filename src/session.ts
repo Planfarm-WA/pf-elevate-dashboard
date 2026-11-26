@@ -3,8 +3,9 @@
 // live updates' reloads of the open business.
 
 import { str, type Actions } from './actions.ts';
+import { loadAdmin } from './admin.ts';
 import type { Backend, BusinessSummary } from './backend.ts';
-import { byId } from './dom.ts';
+import { byId, showMessage } from './dom.ts';
 import { startLiveUpdates, stopLiveUpdates, userIsBusy } from './live-updates.ts';
 import { usePersistence } from './persistence.ts';
 import { renderAll } from './render.ts';
@@ -12,12 +13,13 @@ import { emptyState, state } from './state.ts';
 import { createSupabasePersistence, type SupabasePersistence } from './supabase-persistence.ts';
 import type { SyncStatus } from './sync.ts';
 
-export type Screen = 'login' | 'picker' | 'dashboard' | 'config-error';
+export type Screen = 'login' | 'picker' | 'admin' | 'dashboard' | 'config-error';
 
 /** Show one of the page's screens and hide the others. */
 export function showScreen(screen: Screen): void {
   byId('login-screen').hidden = screen !== 'login';
   byId('business-picker').hidden = screen !== 'picker';
+  byId('admin').hidden = screen !== 'admin';
   byId('config-error').hidden = screen !== 'config-error';
   byId('dashboard').hidden = screen !== 'dashboard';
 }
@@ -37,6 +39,8 @@ let timing: Timing = {};
 let signedInAs = '';
 let businesses: BusinessSummary[] = [];
 let open: SupabasePersistence | null = null;
+/** Whether the signed-in login is staff: checked each time the business list is shown. */
+let staff = false;
 
 function api(): Backend {
   if (!backend) throw new Error('Not in Supabase mode');
@@ -59,12 +63,6 @@ function warnIfUnsaved(event: BeforeUnloadEvent): void {
     event.preventDefault();
     event.returnValue = '';
   }
-}
-
-function showMessage(id: string, text: string): void {
-  const el = byId(id);
-  el.textContent = text;
-  el.hidden = !text;
 }
 
 function showLogin(message = ''): void {
@@ -94,22 +92,26 @@ async function logIn(event: Event): Promise<void> {
 
 /**
  * List the businesses this login can open. With `autoOpen`, open one straight away when the URL
- * names it (?business=…) or when there's only one. `message` is shown above the list.
+ * names it (?business=…), or, for a client, when there's only one. Staff otherwise always get the
+ * list, because "Manage businesses" is on it. `message` is shown above the list.
  */
 async function showBusinesses(email: string, autoOpen: boolean, message = ''): Promise<void> {
   signedInAs = email;
   byId('business-picker-user').textContent = `Signed in as ${email}`;
   showMessage('business-picker-message', message);
+  const staffCheck = api().isStaff().catch(() => false);
   try {
     businesses = await api().listBusinesses();
   } catch (err) {
     businesses = [];
     showMessage('business-picker-message', err instanceof Error ? err.message : String(err));
   }
-  byId('switch-business-btn').hidden = businesses.length < 2;
+  staff = await staffCheck;
+  byId('switch-business-btn').hidden = !staff && businesses.length < 2;
+  byId('manage-businesses-btn').hidden = !staff;
   if (autoOpen) {
     const wanted = new URLSearchParams(location.search).get('business');
-    const target = businesses.find((b) => b.id === wanted) ?? (businesses.length === 1 ? businesses[0] : undefined);
+    const target = businesses.find((b) => b.id === wanted) ?? (!staff && businesses.length === 1 ? businesses[0] : undefined);
     if (target) {
       await openBusiness(target.id);
       return;
@@ -127,9 +129,17 @@ async function showBusinesses(email: string, autoOpen: boolean, message = ''): P
     return li;
   }));
   if (!businesses.length && !byId('business-picker-message').textContent) {
-    showMessage('business-picker-message', "Your login isn't linked to a business yet. Ask Planfarm to add it.");
+    showMessage('business-picker-message', staff
+      ? 'There are no businesses yet. Add one under Manage businesses.'
+      : "Your login isn't linked to a business yet. Ask Planfarm to add it.");
   }
   showScreen('picker');
+}
+
+/** Staff: the Manage businesses screen (admin.ts), from the business list. */
+async function manageBusinesses(): Promise<void> {
+  showScreen('admin');
+  await loadAdmin(api());
 }
 
 async function openBusiness(id: string): Promise<void> {
@@ -210,6 +220,7 @@ async function signOut(): Promise<void> {
   if (!okToLeave()) return;
   closeOpenBusiness();
   await api().signOut();
+  staff = false;
   Object.assign(state, emptyState());
   setUrlBusiness(null);
   showLogin();
@@ -259,10 +270,13 @@ function renderWhoSuggestions(): void {
   }));
 }
 
-/** The login form, the business list, Switch business and Sign out. */
+/** The login form, the business list, Switch business, Sign out, and to and from Manage businesses. */
 export const sessionActions: Actions = {
   logIn: (_el, event) => void logIn(event),
   openBusiness: (el) => void openBusiness(str(el, 'businessId')),
   switchBusiness: () => void switchBusiness(),
   signOut: () => void signOut(),
+  manageBusinesses: () => void manageBusinesses(),
+  // From the admin screen: the list again, with any new names (nothing is open there).
+  backToBusinesses: () => void showBusinesses(signedInAs, false),
 };

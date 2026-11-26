@@ -6,7 +6,7 @@ import { stopLiveUpdates } from '../src/live-updates.ts';
 import { stateToRows } from '../src/rows.ts';
 import { emptyState } from '../src/state.ts';
 import { createFakeBackend, type FakeOptions } from './fake-backend.ts';
-import { $, $$, act, pageBody, setValue } from './helpers.ts';
+import { $, $$, act, pageBody, setValue, value } from './helpers.ts';
 
 /** A small farm: a purpose, one current period with one priority for Sam, and an empty round. */
 function farm(prefix: string) {
@@ -483,6 +483,136 @@ describe('live updates', () => {
   });
 });
 
+describe('managing businesses (staff)', () => {
+  const ADMIN: FakeOptions = { ...STAFF, users: { ...STAFF.users, 'second@test.local': 'pw' }, signedIn: 'staff@test.local' };
+
+  async function openAdmin() {
+    const fake = await start(ADMIN);
+    act('manageBusinesses');
+    await vi.waitFor(() => expect($$('#admin-list .admin-business')).toHaveLength(2));
+    expect(visible('#admin')).toBe(true);
+    return fake;
+  }
+  const loginsOf = (id: string) => $$(`#admin-business-${id} .admin-login-email`).map((el) => el.textContent);
+  const errorFor = (id: string) => $(`#admin-error-${id}`).textContent;
+  const stored = (fake: ReturnType<typeof createFakeBackend>, id: string) => fake.businesses().find((b) => b.id === id);
+  async function backToList() {
+    act('backToBusinesses');
+    await vi.waitFor(() => expect(visible('#business-picker')).toBe(true));
+    return $$('#business-list button').map((b) => b.textContent);
+  }
+
+  it('shows Manage businesses to staff', async () => {
+    await start({ ...STAFF, signedIn: 'staff@test.local' });
+    expect(visible('#business-picker')).toBe(true);
+    expect(visible('#manage-businesses-btn')).toBe(true);
+  });
+
+  it.each([
+    ['a client of two businesses', { ...STAFF, businesses: [STAFF.businesses[0], { ...STAFF.businesses[1], clients: ['client@test.local'] }], signedIn: 'client@test.local' }, '#business-picker'],
+    ['a client of one business', { ...STAFF, signedIn: 'client@test.local' }, '#dashboard'],
+    ['a login with no business', { users: { 'new@test.local': 'pw' }, businesses: STAFF.businesses, signedIn: 'new@test.local' }, '#business-picker'],
+  ] as Array<[string, FakeOptions, string]>)('never shows it to %s', async (_who, options, screen) => {
+    await start(options);
+    expect(visible(screen)).toBe(true);
+    expect(visible('#manage-businesses-btn')).toBe(false);
+    expect(visible('#admin')).toBe(false);
+  });
+
+  it('gives staff with one business the list, so Manage businesses stays reachable', async () => {
+    await start({ ...STAFF, businesses: [STAFF.businesses[0]], signedIn: 'staff@test.local' });
+    expect(visible('#business-picker')).toBe(true);
+    act('openBusiness', { businessId: 'b1' });
+    await vi.waitFor(() => expect(visible('#dashboard')).toBe(true));
+    expect(visible('#switch-business-btn')).toBe(true);
+  });
+
+  it('tells staff with no businesses where to add one', async () => {
+    await start({ ...STAFF, businesses: [], signedIn: 'staff@test.local' });
+    expect($('#business-picker-message').textContent).toBe('There are no businesses yet. Add one under Manage businesses.');
+  });
+
+  it('lists every business with its client logins', async () => {
+    await openAdmin();
+    expect($$('#admin-list input[name="name"]').map((i) => (i as HTMLInputElement).value)).toEqual(['Alpha Farm', 'Beta Farm']);
+    expect(loginsOf('b1')).toEqual(['client@test.local']);
+    expect(loginsOf('b2')).toEqual([]);
+    expect($('#admin-business-b2 .admin-none').textContent).toBe('No client logins yet.');
+  });
+
+  it('adds a business, but not a second one with the same name', async () => {
+    const fake = await openAdmin();
+    setValue('#new-business-name', 'alpha farm');
+    act('createBusiness', {}, 'submit');
+    expect($('#admin-message').textContent).toContain('Another business is already called alpha farm');
+    expect(fake.businesses()).toHaveLength(2);
+
+    setValue('#new-business-name', ' Gamma Farm ');
+    act('createBusiness', {}, 'submit');
+    await vi.waitFor(() => expect($$('#admin-list .admin-business')).toHaveLength(3));
+    expect(fake.businesses().map((b) => b.name)).toEqual(['Alpha Farm', 'Beta Farm', 'Gamma Farm']);
+    expect(value('#new-business-name')).toBe('');
+    expect(visible('#admin-message')).toBe(false);
+    expect(await backToList()).toEqual(['Alpha Farm', 'Beta Farm', 'Gamma Farm']);
+  });
+
+  it('renames a business', async () => {
+    const fake = await openAdmin();
+    setValue('#admin-business-b2 input[name="name"]', 'Beta Holdings');
+    act('renameBusiness', { businessId: 'b2' }, 'submit');
+    await vi.waitFor(() => expect(stored(fake, 'b2')?.name).toBe('Beta Holdings'));
+    expect(await backToList()).toEqual(['Alpha Farm', 'Beta Holdings']);
+  });
+
+  it('links an existing login by email, ignoring letter case, and only once', async () => {
+    const fake = await openAdmin();
+    setValue('#admin-business-b2 input[name="email"]', ' Second@Test.Local ');
+    act('linkClient', { businessId: 'b2' }, 'submit');
+    await vi.waitFor(() => expect(loginsOf('b2')).toEqual(['second@test.local']));
+
+    setValue('#admin-business-b2 input[name="email"]', 'second@test.local');
+    act('linkClient', { businessId: 'b2' }, 'submit');
+    await vi.waitFor(() => expect(value('#admin-business-b2 input[name="email"]')).toBe(''));
+    expect(stored(fake, 'b2')?.clients).toEqual(['second@test.local']);
+  });
+
+  it('says when there is no login with that email, and keeps what was typed', async () => {
+    const fake = await openAdmin();
+    setValue('#admin-business-b2 input[name="email"]', 'nobody@test.local');
+    act('linkClient', { businessId: 'b2' }, 'submit');
+    await vi.waitFor(() => expect(errorFor('b2')).toContain('There is no login with the email nobody@test.local. Create it in Supabase first'));
+    expect(value('#admin-business-b2 input[name="email"]')).toBe('nobody@test.local');
+    expect(stored(fake, 'b2')?.clients).toEqual([]);
+  });
+
+  it('asks before removing a login from a business', async () => {
+    const fake = await openAdmin();
+    vi.mocked(confirm).mockReturnValueOnce(false);
+    act('unlinkClient', { businessId: 'b1', userId: 'user-client@test.local' });
+    expect(confirm).toHaveBeenCalledWith("Remove client@test.local's access to Alpha Farm? The login itself stays.");
+    await settle();
+    expect(stored(fake, 'b1')?.clients).toEqual(['client@test.local']);
+
+    act('unlinkClient', { businessId: 'b1', userId: 'user-client@test.local' });
+    await vi.waitFor(() => expect(loginsOf('b1')).toEqual([]));
+    expect(stored(fake, 'b1')?.clients).toEqual([]);
+  });
+
+  it('deletes a business only when its exact name is typed', async () => {
+    const fake = await openAdmin();
+    setValue('#admin-business-b2 input[name="confirmName"]', 'beta farm');
+    act('deleteBusiness', { businessId: 'b2' }, 'submit');
+    expect(errorFor('b2')).toBe('Type the name exactly as shown (Beta Farm) to delete this business.');
+    expect(fake.businesses().map((b) => b.id)).toEqual(['b1', 'b2']);
+
+    setValue('#admin-business-b2 input[name="confirmName"]', 'Beta Farm');
+    act('deleteBusiness', { businessId: 'b2' }, 'submit');
+    await vi.waitFor(() => expect($$('#admin-list .admin-business')).toHaveLength(1));
+    expect(fake.businesses().map((b) => b.id)).toEqual(['b1']);
+    expect(await backToList()).toEqual(['Alpha Farm']);
+  });
+});
+
 describe('modes', () => {
   it('shows an error page when a production build has no Supabase settings', async () => {
     const { startApp } = await import('../src/app.ts');
@@ -516,5 +646,6 @@ describe('modes', () => {
     expect(visible('#dashboard')).toBe(true);
     expect(visible('#login-screen')).toBe(false);
     expect(visible('#sign-out-btn')).toBe(false);
+    expect(visible('#admin')).toBe(false);
   });
 });

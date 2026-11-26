@@ -16,7 +16,7 @@ Priorities and tasks have a status (On Track / Off Track / Complete), an owner a
 
 **Logging in.** Open the dashboard's web address and log in with the email and password Planfarm gave you.
 - **Clients** go straight into their farm's dashboard.
-- **Staff** see a list of businesses and pick one. **Switch business** in the header goes back to the list. A link with `?business=…` at the end opens that business directly.
+- **Staff** see a list of businesses and pick one, or go to **Manage businesses** (see "Adding a client" below). **Switch business** in the header goes back to the list. A link with `?business=…` at the end opens that business directly.
 - **Sign out** is in the header.
 
 **Saving.** Every change saves itself to the database, so there's no Save button. Everyone who opens the business sees the same data, on any computer or phone. The header shows the save status:
@@ -38,21 +38,18 @@ Changes made on another device show up as soon as you come back to the tab, or w
 
 ### Adding a client (staff)
 
-1. **Create their business** in the Supabase **SQL Editor**:
-   ```sql
-   insert into public.businesses (name) values ('ABC Holdings');
-   ```
-   Its blueprint is created automatically.
-2. **Create their login** under **Authentication → Users → Add user**. Enter their email and a password, and tick **Auto Confirm User**. Send them the password safely, for example by phone or text, not in the same email as the address.
-3. **Link the login to the business** in the SQL Editor:
-   ```sql
-   insert into public.clients (business_id, user_id)
-   select b.id, u.id
-   from public.businesses b, auth.users u
-   where b.name = 'ABC Holdings' and u.email = 'client@example.com';
-   ```
-   It should say `INSERT 0 1`. `INSERT 0 0` means the name or the email didn't match.
-4. **Load their old dashboard file**, if they have one. Open the business in the dashboard and use **Import Data**, or see "Importing a client's export file" below.
+1. **Create their login** in Supabase under **Authentication → Users → Add user**. Enter their email and a password, and tick **Auto Confirm User**. Send them the password safely, for example by phone or text, not in the same email as the address.
+2. **Add their business and link the login** in the dashboard: on the business list, click **Manage businesses**.
+   - Type the business name under **Add business**.
+   - Under the new business, type the client's email and click **Link login**. Letter case doesn't matter. If no login has that email yet, it says so: go back to step 1.
+3. **Load their old dashboard file**, if they have one. Open the business in the dashboard and use **Import Data**, or see "Importing a client's export file" below.
+
+**Manage businesses** also:
+- **renames** a business;
+- **removes** a login from a business. It asks first, and the login itself stays. To stop someone logging in at all, delete their user in Supabase under Authentication → Users;
+- **deletes** a business (under "Delete business…", type its name to confirm). This deletes its whole dashboard and can't be undone, so export its data first if it might be needed.
+
+Two businesses can't have the same name, so `pnpm import-dashboard "<name>"` always knows which one you mean.
 
 Sign-up links per business, so clients can set their own password, are planned. So is a "forgot password" email.
 
@@ -95,26 +92,24 @@ The dashboard keeps its data in Supabase, so it's shared and backed up centrally
    ```
    Then, whenever there are new migrations:
    ```sh
-   pnpm supabase db push
+   pnpm supabase migration list --remote          # what the project already has
+   pnpm supabase db push --remote --dry-run       # what would be applied
+   pnpm supabase db push --remote
    ```
-   You can also paste a migration into the **SQL Editor** and click **Run**, but the CLI won't record it as applied.
+   **Don't leave out `--remote`.** Without it, the CLI (version 3) applies the migrations to the local Supabase on your computer instead.
+
+   You can also paste a migration into the **SQL Editor** and click **Run**, but the CLI won't record it as applied. If you did that, record it before the next push: `pnpm supabase migration repair <version> --status applied --remote`, where the version is the number at the start of the file name, e.g. `000`.
 2. Create your own login under **Authentication → Users**.
 3. Make yourself staff by running this in the SQL Editor, with your email:
    ```sql
    insert into public.staff (user_id)
    select id from auth.users where email = 'you@example.com';
    ```
-4. To give a client login access to their farm business, create the login, then run:
-   ```sql
-   insert into public.clients (business_id, user_id)
-   select b.id, u.id
-   from public.businesses b, auth.users u
-   where b.name = 'Business Name' and u.email = 'client@example.com';
-   ```
+4. Add businesses and client logins from the dashboard, as in "Adding a client (staff)" above.
 
 ### Who can see what
 
-- **Staff** (listed in `staff`) can see and edit every business.
+- **Staff** (listed in `staff`) can see and edit every business. They can also add, rename and delete businesses, and link logins to them or remove them (Manage businesses). Logins themselves are created only in Supabase.
 - **Clients** (logins listed in `clients`) can see and edit only their own farm business. They can't add businesses or change who has access.
 - **People not logged in** can't see anything.
 
@@ -132,7 +127,7 @@ Dates such as "By When" are stored as text, because the dashboard accepts entrie
 
 ### Importing a client's export file
 
-A client's `planfarm-elevate-dashboard-YYYY-MM-DD.json` file can be loaded into their business in the database. First create the business, and add the client's login if they need one (see "Creating the tables" above).
+A client's `planfarm-elevate-dashboard-YYYY-MM-DD.json` file can be loaded into their business in the database. First add the business, and link the client's login if they need one (see "Adding a client (staff)" above).
 
 The script reads its settings from a `.env` file in the repository folder. Git ignores that file,
 so the password never reaches the repository. Create it once:
@@ -167,8 +162,7 @@ The site is deployed on Vercel from the `main` branch. Every other pushed branch
 
 ### Still to do
 
-- Sign-up links per business, plus email sending (SMTP) and "forgot password".
-- An admin screen for staff to create businesses and manage client logins.
+- Sign-up links per business, plus email sending (SMTP) and "forgot password". Creating logins from the dashboard needs these too.
 - Possibly instant updates (Supabase Realtime), so another device's change shows up within a second rather than a minute.
 
 ## Repository layout
@@ -185,7 +179,8 @@ tests/                Tests (`pnpm test`): the page in a simulated browser (loca
                       against an in-memory backend), the import mapping, and the sync
 tsconfig.json         TypeScript settings (`pnpm typecheck`)
 eslint.config.js      Lint rules (`pnpm lint`)
-supabase/migrations/  Database tables and access rules for Supabase (CLI migrations)
+supabase/migrations/  Database tables and access rules for Supabase (CLI migrations, numbered 000, 001, …)
+supabase/checks/      SQL checks of the access rules, run against the local Supabase
 archive/              Removed features kept for reference, with how to bring them back (not built)
 CLAUDE.md             Notes for Claude Code when working on this repository
 ```

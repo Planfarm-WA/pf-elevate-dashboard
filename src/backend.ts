@@ -13,6 +13,13 @@ export interface BusinessSummary {
   name: string;
 }
 
+/** A client login linked to a business (staff only: see client_logins() in 001_staff_admin.sql). */
+export interface ClientLogin {
+  businessId: string;
+  userId: string;
+  email: string;
+}
+
 export interface Backend {
   /** Throws with Supabase's message (e.g. "Invalid login credentials") if it fails. */
   signIn(email: string, password: string): Promise<void>;
@@ -30,6 +37,20 @@ export interface Backend {
   apply(businessId: string, ops: Op[]): Promise<void>;
   /** Replace a business's data with a checked export file (see importer.ts). */
   importFile(businessId: string, file: ParsedExport): Promise<void>;
+
+  // ---- The staff admin screen (src/admin.ts) ----
+  /** True when the signed-in login is staff. */
+  isStaff(): Promise<boolean>;
+  createBusiness(name: string): Promise<BusinessSummary>;
+  renameBusiness(id: string, name: string): Promise<void>;
+  /** Deletes the business and, through the foreign keys, all its data and client links. Logins stay. */
+  deleteBusiness(id: string): Promise<void>;
+  /** Every business's client logins, with their emails. Staff only. */
+  listClientLogins(): Promise<ClientLogin[]>;
+  /** Link an existing login, found by email, to a business. Throws with a message written for users. */
+  linkClient(businessId: string, email: string): Promise<void>;
+  /** Remove a login's access to a business. The login itself stays. */
+  unlinkClient(businessId: string, userId: string): Promise<void>;
 }
 
 type Db = SupabaseClient<Database>;
@@ -160,6 +181,48 @@ export function supabaseBackend(db: Db): Backend {
 
     async importFile(businessId, file) {
       await importDashboard(db, businessId, file);
+    },
+
+    async isStaff() {
+      const { data, error } = await db.rpc('is_staff');
+      fail('Checking staff access', error);
+      return data === true;
+    },
+
+    async createBusiness(name) {
+      // The create_blueprint trigger adds the business's empty blueprint.
+      const { data, error } = await db.from('businesses').insert({ name }).select('id, name').single();
+      if (error) throw new Error(`Adding the business: ${error.message}`);
+      return data;
+    },
+
+    // RLS turns a rename or delete the login may not make into "0 rows", not an error.
+    async renameBusiness(id, name) {
+      const { data, error } = await db.from('businesses').update({ name }).eq('id', id).select('id');
+      fail('Renaming the business', error);
+      if (!data?.length) throw new Error('This business no longer exists, or your login cannot change it.');
+    },
+
+    async deleteBusiness(id) {
+      const { data, error } = await db.from('businesses').delete().eq('id', id).select('id');
+      fail('Deleting the business', error);
+      if (!data?.length) throw new Error('This business no longer exists, or your login cannot delete it.');
+    },
+
+    async listClientLogins() {
+      const { data, error } = await db.rpc('client_logins');
+      fail('Loading the client logins', error);
+      return (data ?? []).map((row) => ({ businessId: row.business_id, userId: row.user_id, email: row.email }));
+    },
+
+    async linkClient(businessId, email) {
+      const { error } = await db.rpc('link_client', { p_business_id: businessId, p_email: email });
+      if (error) throw new Error(error.message);
+    },
+
+    async unlinkClient(businessId, userId) {
+      const { error } = await db.from('clients').delete().eq('business_id', businessId).eq('user_id', userId);
+      fail('Removing the login', error);
     },
   };
 }
