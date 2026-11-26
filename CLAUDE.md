@@ -127,7 +127,7 @@ The period and round tabs (`tab.onclick`/`tab.ondblclick`), drag-and-drop and th
   - The "user text" tests in `tests/dashboard.test.ts` put HTML characters into every field and check that each shows and saves back unchanged. A new field shown on the page belongs in that fixture.
 - **Shared modals.** `#edit-overlay` serves many item types: adding, editing and renaming priorities, tasks, periods, rounds and 1-year targets.
   - Each opener calls `openEditModal(title, fieldsHtml, onSave)` (`src/edit-modal.ts`) and passes its own save logic.
-  - `saveEdit()` reads `#ef-what` (always present) and `#ef-who`/`#ef-when` (`''` when absent). It does nothing while "what" is empty, otherwise runs `onSave` and closes the dialog.
+  - `saveEdit()` reads `#ef-what` (always present) and `#ef-who`/`#ef-when` (`''` when absent). It does nothing while "what" is empty, otherwise runs `onSave` and closes the dialog. Any other field is read by the opener's own `onSave`, like Edit Period's `#ef-targets`.
   - Blueprint text sections use `#bp-edit-overlay` with `currentBpSection`, and sessions have their own modal.
 - **The latest period/round is the active one** (last array element). `current` is set when a period or round is created.
 - **Status buttons toggle:** clicking the active status sets it back to `'none'`. Values are `none | on-track | off-track | complete`. Completing an item plays `playBing()`.
@@ -138,7 +138,10 @@ The period and round tabs (`tab.onclick`/`tab.ondblclick`), drag-and-drop and th
   - `oneyear` used to be strings and is now `{text, done}`. `migrateOneYear()` converts old data and must run before `oneyear` is used.
 - **`updateStats()` writes to hidden `#stat-*` divs.** The stats row was removed but these elements must stay, or the function throws.
 - **Printing.** `printPeriod120` / `printRound30` add `print-target` and `body.printing-single` for the `@media print` rules, and inject temporary status labels with `addPrintStatusSpans()`.
-- **Not displayed:** `periods120[].oneyear` (targets entered in the New Period modal) is saved but never shown.
+- **Period Targets** are `periods120[].oneyear` in the data (`periods_120.one_year_targets` in the database).
+  - They're plain strings, typed one per line in the New Period dialog or in Edit Period (double-click the period's tab).
+  - The period's card lists them when there are any.
+  - They're unrelated to the Blueprint's 1-Year Targets (`blueprint.oneyear`, `{text, done}`).
 
 ## Export / import format
 
@@ -206,6 +209,7 @@ Then run each migration in order, e.g. `psql -v ON_ERROR_STOP=1 -f supabase/migr
 - Leaving a business stops its saving, so a retry can't write another business's data into it (the "Leaving a business" bullet above).
 - User text is escaped before it goes into HTML (`esc()`, see "How the page works").
 - The Session Notes card, which never saved anything, is gone. Notes go in a session's Notes field or a round's notes box. Its markup, code, style and test are kept in `archive/session-notes-card.md`, with how to bring it back.
+- Period Targets (`periods120[].oneyear`) show on each period's card and can be edited (see "How the page works").
 
 **Still to do,** roughly in order. Production (`main`) still serves the old single-file site until the merge, the last item.
 
@@ -214,9 +218,8 @@ Then run each migration in order, e.g. `psql -v ON_ERROR_STOP=1 -f supabase/migr
    - a join page, and public sign-up turned back on;
    - email sending (SMTP, e.g. Resend or Postmark) set up in Supabase Auth, together with a "forgot password" flow.
 2. **An admin screen for staff:** create businesses and see or remove client links. Creating logins needs the service-role key, so it must happen server-side (an Edge Function), never in the browser.
-3. **`periods120[].oneyear`:** either show it on the period panel or stop collecting it.
-4. **Maybe live updates** (Supabase Realtime), so a change on one device shows up on another without reloading. Today the last write wins per row.
-5. **Merge `supabase-schema` into `main` (production).** Clients' current data is in their own browsers on the old site, so first:
+3. **Maybe live updates** (Supabase Realtime), so a change on one device shows up on another without reloading. Today the last write wins per row.
+4. **Merge `supabase-schema` into `main` (production).** Clients' current data is in their own browsers on the old site, so first:
    - give every client a login (README "Adding a client (staff)");
    - import each client's export file with `pnpm import-dashboard`.
 

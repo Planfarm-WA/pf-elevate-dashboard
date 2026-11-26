@@ -1,5 +1,6 @@
-// The 120-Day Priorities tab: one tab per period, its priorities, statuses, "Push →", renaming,
-// and the New Period dialog (#modal-120-overlay). The last period is the active one.
+// The 120-Day Priorities tab: one tab per period, its Period Targets and priorities, statuses,
+// "Push →", the Edit Period dialog (double-click a tab) and the New Period dialog
+// (#modal-120-overlay). The last period is the active one.
 
 import { num, oneOf, str, type Actions } from '../actions.ts';
 import { byId } from '../dom.ts';
@@ -25,9 +26,9 @@ export function render120Periods(): void {
     const isActive = period.id === activePeriod.id;
     const tab = document.createElement('div');
     tab.className = `round-tab ${isActive ? 'active' : ''} ${period.current ? 'current' : ''}`;
-    tab.textContent = period.label; tab.title = 'Double-click to rename';
+    tab.textContent = period.label; tab.title = 'Double-click to edit';
     tab.onclick = () => switch120Period(period.id);
-    tab.ondblclick = (e) => { e.stopPropagation(); renamePeriod120(period.id); };
+    tab.ondblclick = (e) => { e.stopPropagation(); editPeriod120(period.id); };
     tab.id = `ptab-${period.id}`;
     tabsEl.appendChild(tab);
     const done = period.priorities.filter((p) => p.status === 'complete').length;
@@ -36,11 +37,25 @@ export function render120Periods(): void {
     panel.id = `ppanel-${period.id}`;
     panel.className = `round-panel ${isActive ? 'active' : ''}`;
     const pid = esc(period.id);
-    panel.innerHTML = `<div class="card"><div class="card-header" style="justify-content:space-between;"><div style="display:flex;align-items:center;gap:10px"><span class="icon">⚡</span><h2>${esc(period.label)} — ${esc(period.period)}</h2></div><div style="display:flex;gap:6px;align-items:center;"><button class="btn btn-sm print-period-btn" data-click="printPeriod120" data-period-id="${pid}" title="Print this period">🖨 Print</button><button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.4);font-size:12px;" data-click="addPriority120" data-period-id="${pid}">＋ Add Priority</button></div></div><div class="progress-wrap"><div class="progress-label"><span>Progress</span><span id="prog-120-text-${pid}">${done} of ${period.priorities.length} complete</span></div><div class="progress-bar"><div class="progress-fill" id="prog-120-bar-${pid}" style="width:${pct}%"></div></div></div><table class="priority-table"><thead><tr><th style="width:20px"></th><th>Status</th><th>What</th><th style="width:100px">Who</th><th style="width:100px">By When</th><th style="width:90px"></th></tr></thead><tbody id="body-120-${pid}"></tbody></table><div class="status-legend"><span class="legend-item"><span class="legend-dot dot-on-track"></span> On Track</span><span class="legend-item"><span class="legend-dot dot-off-track"></span> Off Track</span><span class="legend-item"><span class="legend-dot dot-complete"></span> Complete</span><span style="margin-left:auto;font-size:11px;color:var(--grey-light)">💡 Use "Push →" to carry items into the next period</span></div></div>`;
+    panel.innerHTML = `<div class="card"><div class="card-header" style="justify-content:space-between;"><div style="display:flex;align-items:center;gap:10px"><span class="icon">⚡</span><h2>${esc(period.label)} — ${esc(period.period)}</h2></div><div style="display:flex;gap:6px;align-items:center;"><button class="btn btn-sm print-period-btn" data-click="printPeriod120" data-period-id="${pid}" title="Print this period">🖨 Print</button><button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.4);font-size:12px;" data-click="addPriority120" data-period-id="${pid}">＋ Add Priority</button></div></div>${periodTargetsHtml(period.oneyear)}<div class="progress-wrap"><div class="progress-label"><span>Progress</span><span id="prog-120-text-${pid}">${done} of ${period.priorities.length} complete</span></div><div class="progress-bar"><div class="progress-fill" id="prog-120-bar-${pid}" style="width:${pct}%"></div></div></div><table class="priority-table"><thead><tr><th style="width:20px"></th><th>Status</th><th>What</th><th style="width:100px">Who</th><th style="width:100px">By When</th><th style="width:90px"></th></tr></thead><tbody id="body-120-${pid}"></tbody></table><div class="status-legend"><span class="legend-item"><span class="legend-dot dot-on-track"></span> On Track</span><span class="legend-item"><span class="legend-dot dot-off-track"></span> Off Track</span><span class="legend-item"><span class="legend-dot dot-complete"></span> Complete</span><span style="margin-left:auto;font-size:11px;color:var(--grey-light)">💡 Use "Push →" to carry items into the next period</span></div></div>`;
     panelsEl.appendChild(panel);
     renderPeriodPriorities(period.id);
   });
   updateStats();
+}
+
+/**
+ * A period's Period Targets (`oneyear` in the data), listed under its card header. Nothing when it
+ * has none, so older periods and periods created without targets look as before.
+ */
+function periodTargetsHtml(targets: string[] | undefined): string {
+  if (!targets?.length) return '';
+  return `<div class="card-body period-targets"><h3>Period Targets</h3><ul>${targets.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></div>`;
+}
+
+/** The targets box (New Period and Edit Period dialogs): one target per line, blank lines dropped. */
+function targetLines(text: string): string[] {
+  return text.split('\n').map((v) => v.trim()).filter(Boolean);
 }
 
 export function renderPeriodPriorities(periodId: string): void {
@@ -136,15 +151,16 @@ function deletePriority120(periodId: string, itemId: string): void {
   save(); renderPeriodPriorities(periodId); updateStats();
 }
 
-/** Double-clicking a period tab. */
-function renamePeriod120(periodId: string): void {
+/** Double-clicking a period tab: its name, date range and Period Targets. */
+function editPeriod120(periodId: string): void {
   const period = state.periods120.find((p) => p.id === periodId); if (!period) return;
   openEditModal(
-    'Rename Period',
-    `<div class="edit-field"><label>Period Name</label><input id="ef-what" value="${esc(period.label)}"></div><div class="edit-field"><label>Date Range</label><input id="ef-when" value="${esc(period.period)}"></div>`,
+    'Edit Period',
+    `<div class="edit-field"><label>Period Name</label><input id="ef-what" value="${esc(period.label)}"></div><div class="edit-field"><label>Date Range</label><input id="ef-when" value="${esc(period.period)}"></div><div class="edit-field"><label>Period Targets (one per line)</label><textarea id="ef-targets" style="min-height:100px">${esc((period.oneyear ?? []).join('\n'))}</textarea></div>`,
     ({ what, when }) => {
+      const targets = targetLines(byId<HTMLTextAreaElement>('ef-targets').value);
       const period = state.periods120.find((p) => p.id === periodId);
-      if (period) { period.label = what; if (when) period.period = when; }
+      if (period) { period.label = what; if (when) period.period = when; period.oneyear = targets; }
       save(); render120Periods();
     },
   );
@@ -185,9 +201,8 @@ function remove120TaskRow(id: number): void {
 function createPeriod120(): void {
   const label = byId<HTMLInputElement>('new-120-label').value.trim();
   const period = byId<HTMLInputElement>('new-120-period').value.trim();
-  const targetsRaw = byId<HTMLTextAreaElement>('new-120-targets').value.trim();
   if (!label) { alert('Please enter a period label.'); return; }
-  const oneyear = targetsRaw ? targetsRaw.split('\n').map((v) => v.trim()).filter(Boolean) : [];
+  const oneyear = targetLines(byId<HTMLTextAreaElement>('new-120-targets').value);
   const priorities: Item[] = [];
   (state.pendingPushes120 || []).forEach((p) => { priorities.push({ id: newId(), what: p.what, who: p.who, when: p.when, status: 'none', pushed: false, carriedFrom: p.fromPeriod }); });
   document.querySelectorAll('#task-rows-120 .form-row').forEach((row) => {

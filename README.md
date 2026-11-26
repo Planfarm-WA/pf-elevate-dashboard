@@ -5,12 +5,12 @@ A one-page dashboard used in Planfarm Elevate coaching to keep a farm client's p
 | Tab | What it holds |
 |---|---|
 | 🗺 Farm Blueprint | 10-Year Direction, 3-Year Picture, Core Values, 1-Year Targets, Purpose |
-| ⚡ 120-Day Priorities | One tab per 120-day period, each with its priority actions |
+| ⚡ 120-Day Priorities | One tab per 120-day period, each with its Period Targets and priority actions |
 | ✅ 30-Day To-Do's | One tab per monthly round, each with its tasks and coaching notes |
 | ⚠️ Issues & Opportunities | What's on the radar right now |
 | 📋 Coaching Sessions | Upcoming and completed sessions |
 
-Priorities and tasks have a status (On Track / Off Track / Complete), an owner and a due date. Rows can be dragged to reorder them.
+Priorities and tasks have a status (On Track / Off Track / Complete), an owner and a due date. Rows can be dragged to reorder them. Double-click a period's or round's tab to edit it; for a period that includes its Period Targets.
 
 ## Using it
 

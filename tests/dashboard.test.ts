@@ -387,6 +387,7 @@ describe('120-day priorities', () => {
       ],
     });
     expect($('#modal-120-overlay').style.display).toBe('none');
+    expect($$(`#ppanel-${period.id} .period-targets li`).map((li) => li.textContent)).toEqual(['Target A', 'Target B']);
     expect($$(`#body-120-${period.id} tr`)).toHaveLength(2);
     expect($(`#prog-120-text-${period.id}`).textContent).toBe('0 of 2 complete');
   });
@@ -466,21 +467,33 @@ describe('120-day priorities', () => {
     expect(saved().pendingPushes120).toEqual([]);
   });
 
-  it('renames a period by double-clicking its tab, and switches tabs on click', async () => {
+  it('edits a period (name, dates, Period Targets) by double-clicking its tab, and switches tabs on click', async () => {
     await startApp();
     const first = createPeriod('Period 1', 'Jan – Apr');
     const second = createPeriod('Period 2', 'May – Aug');
     expect($(`#ppanel-${second}`).classList.contains('active')).toBe(true);
+    expect($$(`#ppanel-${first} .period-targets`)).toHaveLength(0);
 
     $(`#ptab-${first}`).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect($(`#ppanel-${first}`).classList.contains('active')).toBe(true);
     expect($(`#ppanel-${second}`).classList.contains('active')).toBe(false);
 
     $(`#ptab-${first}`).dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
-    expect($('#edit-title').textContent).toBe('Rename Period');
+    expect($('#edit-title').textContent).toBe('Edit Period');
+    expect(value('#ef-targets')).toBe('');
+    setValue('#ef-targets', ' Grow 20% more \n\nHire help');
     saveEditDialog({ what: 'P1 – 2026', when: 'Feb – May' });
-    expect(saved().periods120[0]).toMatchObject({ label: 'P1 – 2026', period: 'Feb – May' });
+    expect(saved().periods120[0]).toMatchObject({ label: 'P1 – 2026', period: 'Feb – May', oneyear: ['Grow 20% more', 'Hire help'] });
     expect($(`#ptab-${first}`).textContent).toBe('P1 – 2026');
+    expect($$(`#ppanel-${first} .period-targets li`).map((li) => li.textContent)).toEqual(['Grow 20% more', 'Hire help']);
+
+    // Clearing the box removes the list.
+    $(`#ptab-${first}`).dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    expect(value('#ef-targets')).toBe('Grow 20% more\nHire help');
+    setValue('#ef-targets', '');
+    act('saveEdit');
+    expect(saved().periods120[0].oneyear).toEqual([]);
+    expect($$(`#ppanel-${first} .period-targets`)).toHaveLength(0);
   });
 });
 
@@ -842,7 +855,7 @@ describe('user text', () => {
 
   it('shows text exactly as typed, never as HTML, and every dialog saves it back unchanged', async () => {
     await startApp(fixture({
-      periods120: [{ id: 'p1', label: TEXT, period: TEXT, current: true, oneyear: [], priorities: [{ id: 'x1', what: TEXT, who: WHO, when: TEXT, status: 'none', pushed: false }] }],
+      periods120: [{ id: 'p1', label: TEXT, period: TEXT, current: true, oneyear: [TEXT], priorities: [{ id: 'x1', what: TEXT, who: WHO, when: TEXT, status: 'none', pushed: false }] }],
       rounds: [{ id: 'r1', label: TEXT, period: TEXT, current: true, notes: TEXT, tasks: [{ id: 't1', what: TEXT, who: WHO, when: TEXT, status: 'none', pushed: false }] }],
       sessions: [{ id: 's1', date: TEXT, format: TEXT, focus: TEXT, notes: TEXT, done: false }],
       blueprint: { tenyear: TEXT, threeyear: TEXT, values: [TEXT], oneyear: [{ text: TEXT, done: false }], purpose: TEXT, issues: [TEXT, `OPPORTUNITY: ${TEXT}`] },
@@ -853,6 +866,7 @@ describe('user text', () => {
 
     // Shown as text everywhere.
     expect($('#ppanel-p1 h2').textContent).toBe(`${TEXT} — ${TEXT}`);
+    expect($('#ppanel-p1 .period-targets li').textContent).toBe(TEXT);
     expect($('#body-120-p1 tr').textContent).toContain(TEXT);
     expect($$('#body-120-p1 .badge').map((b) => b.textContent)).toEqual([WHO]);
     expect($('#panel-r1 h2').textContent).toBe(`${TEXT} — ${TEXT}`);
@@ -888,9 +902,9 @@ describe('user text', () => {
     expect(task(0, 't1')).toMatchObject({ what: TEXT, who: WHO, when: TEXT });
 
     $('#ptab-p1').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
-    expect([value('#ef-what'), value('#ef-when')]).toEqual([TEXT, TEXT]);
+    expect([value('#ef-what'), value('#ef-when'), value('#ef-targets')]).toEqual([TEXT, TEXT, TEXT]);
     act('saveEdit');
-    expect(saved().periods120[0]).toMatchObject({ label: TEXT, period: TEXT });
+    expect(saved().periods120[0]).toMatchObject({ label: TEXT, period: TEXT, oneyear: [TEXT] });
 
     $('#tab-r1').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
     expect([value('#ef-what'), value('#ef-when')]).toEqual([TEXT, TEXT]);
