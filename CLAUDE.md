@@ -246,21 +246,18 @@ psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=
 - The Session Notes card, which never saved anything, is gone. Notes go in a session's Notes field or a round's notes box. Its markup, code, style and test are kept in `archive/session-notes-card.md`, with how to bring it back.
 - Period Targets (`periods120[].oneyear`) show on each period's card and can be edited (see "How the page works").
 - Live updates: the open business reloads when idle, so other devices' changes show up within a minute (see "Saving in Supabase mode").
-- Manage businesses (staff): add, rename and delete businesses, and link or remove client logins by email (`admin.ts`, `001_staff_admin.sql`). Logins are still created in the Supabase dashboard.
+- Manage businesses (staff): add, rename and delete businesses, and link or remove client logins by email (`admin.ts`, `001_staff_admin.sql`). Logins are still created in the Supabase dashboard. `001` was pushed to the hosted project on 2026-11-26 (`pnpm supabase db push --remote`).
 
 **Still to do,** roughly in order. Production (`main`) still serves the old single-file site until the merge, the last item.
 
-1. **Apply `001_staff_admin.sql` to the hosted project** (the user's step). Until then, Manage businesses on the preview shows "Could not find the function".
-   1. `pnpm supabase migration list --remote`. If `000` isn't recorded (it was pasted in the SQL Editor), first run `pnpm supabase migration repair 000 --status applied --remote`.
-   2. `pnpm supabase db push --remote --dry-run`, then `pnpm supabase db push --remote`.
-2. **Per-business sign-up links**, so clients set their own password. This needs:
+1. **Per-business sign-up links**, so clients set their own password. This needs:
    - an `invites` table plus a `security definer` function that links the new login to the business;
    - a join page, and public sign-up turned back on;
    - email sending (SMTP, e.g. Resend or Postmark) set up in Supabase Auth, together with a "forgot password" flow.
 
    Creating logins from the dashboard (e.g. on Manage businesses) needs the service-role key, so it must happen server-side (an Edge Function), never in the browser.
-3. **Maybe Supabase Realtime**, so changes from another device show up within a second instead of a minute. Subscribe to the business's tables and call `reloadOpenBusiness()`. This needs a migration adding the tables to the `supabase_realtime` publication. Delete events aren't filtered by business, and `priorities_120`/`tasks_30` have no `business_id` to filter on.
-4. **Merge `supabase-schema` into `main` (production).** Clients' current data is in their own browsers on the old site, so first:
+2. **Maybe Supabase Realtime**, so changes from another device show up within a second instead of a minute. Subscribe to the business's tables and call `reloadOpenBusiness()`. This needs a migration adding the tables to the `supabase_realtime` publication. Delete events aren't filtered by business, and `priorities_120`/`tasks_30` have no `business_id` to filter on.
+3. **Merge `supabase-schema` into `main` (production).** Clients' current data is in their own browsers on the old site, so first:
    - give every client a login (README "Adding a client (staff)");
    - import each client's export file with `pnpm import-dashboard`.
 
