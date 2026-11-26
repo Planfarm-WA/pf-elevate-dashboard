@@ -93,7 +93,7 @@ The period and round tabs (`tab.onclick`/`tab.ondblclick`), drag-and-drop and th
 |---|---|---|
 | **Supabase** | `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` are set (not in tests) | Login form, then the business list (one business, or `?business=<id>`, opens directly), then the dashboard. Changes sync to Supabase |
 | **Local** | Vitest (`MODE === 'test'`), or `pnpm dev` without the variables | No login. The whole state lives in `localStorage` (`storage.ts`), which is separate for each web address |
-| **Missing config** | A production build without the variables | A "Not connected" page. It never quietly falls back to `localStorage` |
+| **Missing config** | A production build without the variables, or (in any build) values supabase-js rejects, such as a URL without `https://` | A "Not connected" page, showing supabase-js's error when a value was rejected. It never quietly falls back to `localStorage` |
 
 **Saving in Supabase mode** (`supabase-persistence.ts`, `sync.ts`, `rows.ts`). The sections still just change `state` and call `save()`.
 - **Persistence.** `save()` hands the change to the active persistence. The Supabase one keeps `lastSaved`, the rows as last saved successfully. About 400 ms after the latest change, it compares `stateToRows(state)` with `lastSaved` in memory and writes only the differences through the `Backend`.

@@ -22,8 +22,11 @@ export type AppMode =
   | { kind: 'local' }
   /** Log in, choose a business, and save to Supabase. */
   | { kind: 'supabase'; backend: Backend; timing?: { debounceMs?: number; retryMs?: number[] } }
-  /** A production build without Supabase settings: show an error instead of quietly using localStorage. */
-  | { kind: 'missing-config' };
+  /**
+   * No or invalid Supabase settings: show an error instead of quietly using localStorage.
+   * `problem` is supabase-js's message when the settings were there but rejected.
+   */
+  | { kind: 'missing-config'; problem?: string };
 
 // Buttons and inputs name their action in data-click / data-input / data-change / data-submit
 // attributes, and one document listener per event type runs it (src/actions.ts). Each module
@@ -54,6 +57,11 @@ export async function startApp(mode: AppMode): Promise<void> {
     updateLastUpdatedDisplay();
     showScreen('dashboard');
   } else if (mode.kind === 'missing-config') {
+    if (mode.problem) {
+      const detail = byId('config-error-detail');
+      detail.textContent = mode.problem;
+      detail.hidden = false;
+    }
     showScreen('config-error');
   } else {
     showScreen('login');

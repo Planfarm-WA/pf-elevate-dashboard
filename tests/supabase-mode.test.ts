@@ -169,6 +169,24 @@ describe('modes', () => {
     expect(visible('#config-error')).toBe(true);
     expect(visible('#dashboard')).toBe(false);
     expect(visible('#login-screen')).toBe(false);
+    expect(visible('#config-error-detail')).toBe(false);
+  });
+
+  it("shows supabase-js's message on the error page when the Supabase URL is malformed", async () => {
+    const { appModeFromEnv } = await import('../src/config.ts');
+    const mode = appModeFromEnv({
+      ...import.meta.env, MODE: 'production', DEV: false, PROD: true,
+      VITE_SUPABASE_URL: '127.0.0.1:54321', VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test',
+    });
+    expect(mode.kind).toBe('missing-config');
+
+    const { startApp } = await import('../src/app.ts');
+    await startApp(mode);
+    expect(visible('#config-error')).toBe(true);
+    expect(visible('#dashboard')).toBe(false);
+    expect(visible('#login-screen')).toBe(false);
+    expect(visible('#config-error-detail')).toBe(true);
+    expect($('#config-error-detail').textContent).toContain('Invalid supabaseUrl');
   });
 
   it('skips the login in local mode', async () => {

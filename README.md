@@ -162,7 +162,7 @@ The script won't start without the file. Variables exported in the terminal over
 ### Deploying (Vercel)
 
 The site is deployed on Vercel from the `main` branch. Every other pushed branch gets its own preview address.
-- **Vercel → Settings → Environment Variables** needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` for both Production and Preview. Without them, the page shows "Not connected" instead of quietly using browser storage.
+- **Vercel → Settings → Environment Variables** needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` for both Production and Preview. Without them, the page shows "Not connected" instead of quietly using browser storage. With a value Supabase rejects (for example a URL without `https://`), it shows "Not connected" with the error. Vite builds these values into the page, so redeploy after changing them.
 - **Supabase → Authentication → Sign In / Providers:** keep **Email** on, and turn **"Allow new users to sign up"** off, because logins are created by staff.
 
 ### Still to do
