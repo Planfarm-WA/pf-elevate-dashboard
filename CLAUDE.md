@@ -186,6 +186,9 @@ Supabase CLI migrations:
     - `link_client(business_id, email)`: finds the login by email, ignoring case; clear errors; linking twice does nothing.
 
     `supabase/checks/staff_admin.sql` checks all of this as staff, a client and anon.
+- **Safe only while public sign-up is off.** A security review of this branch on 2026-11-26 found no vulnerabilities. These two are known, and safe only while the hosted project keeps "Allow new users to sign up" off (staff create every login):
+  - `link_client()` links whichever login has the email at that moment, and doesn't check that the email was confirmed. With sign-up on, someone could sign up with a client's email before staff link it. Before sign-up goes on (To-do 1), a new migration must make it skip unconfirmed logins (`and u.email_confirmed_at is not null`), and invite links must link the login that redeems the invite rather than look one up by email.
+  - `supabase/config.toml`'s `[auth]` settings are the `supabase init` defaults for the local stack: sign-up on (`enable_signup = true`) and email confirmation off (`enable_confirmations = false` under `[auth.email]`). `pnpm supabase config push` would copy them to the hosted project, so don't run it unless both are changed first.
 - **Adding a function:**
   - `security definer set search_path = ''`, and qualify every name (`public.…`, `auth.…`);
   - check `public.is_staff()` (or `can_access_business`) first;
@@ -253,7 +256,8 @@ psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=
 1. **Per-business sign-up links**, so clients set their own password. This needs:
    - an `invites` table plus a `security definer` function that links the new login to the business;
    - a join page, and public sign-up turned back on;
-   - email sending (SMTP, e.g. Resend or Postmark) set up in Supabase Auth, together with a "forgot password" flow.
+   - email sending (SMTP, e.g. Resend or Postmark) set up in Supabase Auth, together with a "forgot password" flow;
+   - before sign-up goes on, the `link_client()` fix under "Safe only while public sign-up is off" (Supabase schema above).
 
    Creating logins from the dashboard (e.g. on Manage businesses) needs the service-role key, so it must happen server-side (an Edge Function), never in the browser.
 2. **Maybe Supabase Realtime**, so changes from another device show up within a second instead of a minute. Subscribe to the business's tables and call `reloadOpenBusiness()`. This needs a migration adding the tables to the `supabase_realtime` publication. Delete events aren't filtered by business, and `priorities_120`/`tasks_30` have no `business_id` to filter on.
