@@ -11,8 +11,14 @@ import { createSyncer, type SyncStatus } from './sync.ts';
 export interface SupabasePersistence extends Persistence {
   /** The open business's name (after load()). */
   businessName(): string;
-  /** True while changes haven't reached the database yet. */
+  /** True while changes haven't reached the database yet, or an import is still running. */
   pending(): boolean;
+  /**
+   * The business is being left (Switch business, Sign out): stop saving it for good, and never
+   * load it into `state` again. `state` will soon hold another business, or nothing, and this
+   * business's saving must not write that into it.
+   */
+  close(): void;
 }
 
 export function createSupabasePersistence(
@@ -22,6 +28,8 @@ export function createSupabasePersistence(
   timing: { debounceMs?: number; retryMs?: number[] } = {},
 ): SupabasePersistence {
   let name = '';
+  let closed = false;
+  let importing = false;
   const syncer = createSyncer({
     snapshot: () => stateToRows(state),
     apply: (ops) => backend.apply(businessId, ops),
@@ -31,6 +39,7 @@ export function createSupabasePersistence(
 
   async function load(): Promise<void> {
     const business = await backend.loadBusiness(businessId);
+    if (closed) return;
     name = business.name;
     Object.assign(state, rowsToState(business));
     syncer.reset(stateToRows(state));
@@ -40,10 +49,19 @@ export function createSupabasePersistence(
     load,
     changed: () => syncer.changed(),
     async importData(data: ImportedData) {
-      await backend.importFile(businessId, parseExportFile(data));
-      await load();
+      importing = true;
+      try {
+        await backend.importFile(businessId, parseExportFile(data));
+        await load();
+      } finally {
+        importing = false;
+      }
     },
     businessName: () => name,
-    pending: () => syncer.pending(),
+    pending: () => !closed && (importing || syncer.pending()),
+    close() {
+      closed = true;
+      syncer.stop();
+    },
   };
 }

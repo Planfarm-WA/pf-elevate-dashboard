@@ -165,4 +165,44 @@ describe('createSyncer', () => {
     await vi.advanceTimersByTimeAsync(400);
     expect(apply).not.toHaveBeenCalled();
   });
+
+  it('stops for good: drops the retry and later changes, and reports nothing more', async () => {
+    const apply = vi.fn(async (ops: Op[]) => { void ops; throw new Error('offline'); });
+    const { s, syncer, statuses } = setup(apply);
+    s.blueprint.purpose = 'Feed more'; syncer.changed();
+    await vi.advanceTimersByTimeAsync(400);
+    expect(statuses.at(-1)).toBe('error');
+
+    syncer.stop();
+    expect(syncer.pending()).toBe(false);
+    s.blueprint.purpose = 'Feed even more'; syncer.changed();
+    syncer.reset(stateToRows(s));
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(statuses).toEqual(['saved', 'saving', 'error']);
+    expect(syncer.pending()).toBe(false);
+  });
+
+  it.each(['succeeds', 'fails'])('ignores a write that was under way when it stopped (the write %s)', async (outcome) => {
+    let finish = () => {};
+    const apply = vi.fn((ops: Op[]) => {
+      void ops;
+      return new Promise<void>((resolve, reject) => {
+        finish = outcome === 'succeeds' ? resolve : () => reject(new Error('offline'));
+      });
+    });
+    const { s, syncer, statuses } = setup(apply);
+    s.blueprint.purpose = 'One'; syncer.changed();
+    await vi.advanceTimersByTimeAsync(400);
+    expect(apply).toHaveBeenCalledTimes(1);
+    s.blueprint.purpose = 'Two'; syncer.changed();
+
+    syncer.stop();
+    const reported = statuses.length;
+    finish();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(statuses).toHaveLength(reported);
+    expect(syncer.pending()).toBe(false);
+  });
 });

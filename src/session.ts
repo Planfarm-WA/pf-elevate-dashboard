@@ -131,6 +131,7 @@ async function openBusiness(id: string): Promise<void> {
     showScreen('picker');
     return;
   }
+  closeOpenBusiness();
   open = persistence;
   usePersistence(persistence);
   const name = persistence.businessName();
@@ -148,17 +149,27 @@ function okToLeave(): boolean {
   return !open?.pending() || confirm("Some changes haven't been saved yet. Leave anyway?");
 }
 
+/**
+ * Stop saving the open business, then forget it. Its unsaved changes are dropped ("Leave
+ * anyway?"); a save still waiting or retrying would otherwise later write `state` (by then another
+ * business, or nothing) into it.
+ */
+function closeOpenBusiness(): void {
+  open?.close();
+  open = null;
+}
+
 async function switchBusiness(): Promise<void> {
   if (!okToLeave()) return;
-  open = null;
+  closeOpenBusiness();
   setUrlBusiness(null);
   await showBusinesses(signedInAs, false);
 }
 
 async function signOut(): Promise<void> {
   if (!okToLeave()) return;
+  closeOpenBusiness();
   await api().signOut();
-  open = null;
   Object.assign(state, emptyState());
   setUrlBusiness(null);
   showLogin();

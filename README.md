@@ -22,7 +22,7 @@ Priorities and tasks have a status (On Track / Off Track / Complete), an owner a
 **Saving.** Every change saves itself to the database, so there's no Save button. Everyone who opens the business sees the same data, on any computer or phone. The header shows the save status:
 - **Saving…** while a change is on its way.
 - **Saved 14:32** once it's in the database.
-- **Not saved — retrying** if the connection dropped. Keep the page open and it tries again by itself. Closing the tab while something isn't saved yet shows a warning.
+- **Not saved — retrying** if the connection dropped. Keep the page open and it tries again by itself. Closing the tab, **Switch business** or **Sign out** while something isn't saved yet asks first. If you leave anyway, that change is lost.
 
 If two people edit the *same* item at the same moment, the last change wins. Changes made on another device show up when you reload the page.
 

@@ -18,8 +18,8 @@ src/
   render.ts         renderAll(): every tab from `state`
   persistence.ts    the Persistence interface (load / changed / importData), usePersistence(), and save()
   storage.ts        localPersistence: the whole state as JSON in localStorage key pf_elevate_blank1
-  supabase-persistence.ts  createSupabasePersistence(): load one business, sync changes (sync.ts)
-  sync.ts           diff(lastSaved, next) → ops, and createSyncer(): debounce, apply, retry, save status
+  supabase-persistence.ts  createSupabasePersistence(): load one business, sync changes (sync.ts), close() when it's left
+  sync.ts           diff(lastSaved, next) → ops, and createSyncer(): debounce, apply, retry, save status, stop()
   rows.ts           stateToRows() / rowsToState(): `state` ⇄ one business's rows (Snapshot)
   backend.ts        Backend interface + supabaseBackend(db): auth, list/load businesses, apply ops, import
   supabase.ts       createDb(): the typed browser client (keeps the session in localStorage)
@@ -101,6 +101,11 @@ The period and round tabs (`tab.onclick`/`tab.ondblclick`), drag-and-drop and th
 - **Op order:** the blueprint, the lists, deletes (children first), periods and rounds turning `is_current` off, then those turning it on (the "one current per business" index), then priorities and tasks, then sessions.
 - **Failures.** A failure keeps `lastSaved` and retries with a growing wait. Every op can be repeated safely, so a partial write still converges.
 - **What the user sees.** The header shows "Saving…" / "Saved hh:mm" / "Not saved — retrying", and `beforeunload` warns while anything is pending.
+- **Leaving a business.**
+  - Switch business and Sign out ask "Leave anyway?" while anything is pending. `pending()` also counts an import that's still running.
+  - They then call `closeOpenBusiness()` (`session.ts`). The persistence's `close()` stops its syncer for good with `stop()`, and unsaved changes are dropped.
+  - Without that, a retry would later compare `state` (by then another business, or nothing) with the old business's saved rows, and write the difference into the old business.
+  - A closed persistence's `load()` leaves `state` alone, for example when an import finishes after the user left.
 - **What's out of scope.** Two people editing the same row: the last write wins. There are no live updates (Realtime).
 - **Ids.** Ids are UUID strings from `newId()`, the same in the app and the database. Older saves and export files with numeric ids are converted by `stringifyIds()`.
 

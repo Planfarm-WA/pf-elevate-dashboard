@@ -95,6 +95,13 @@ export interface Syncer {
   changed(): void;
   /** True while changes haven't reached the database yet (waiting, writing, or failed). */
   pending(): boolean;
+  /**
+   * Stop for good: no more writes, retries or status updates, and unsaved changes are dropped. A
+   * write already under way still reaches the database, but its result is ignored. Without this,
+   * a retry after the business was left would compare `state` (by then another business, or empty)
+   * with this business's saved rows, and write the difference into this business.
+   */
+  stop(): void;
 }
 
 export function createSyncer(options: SyncerOptions): Syncer {
@@ -106,25 +113,29 @@ export function createSyncer(options: SyncerOptions): Syncer {
   let runAgain = false;
   let failed = false;
   let attempt = 0;
+  let stopped = false;
 
   function schedule(delay: number): void {
+    if (stopped) return;
     if (timer) clearTimeout(timer);
     timer = setTimeout(() => { timer = null; void run(); }, delay);
   }
 
   async function run(): Promise<void> {
-    if (!saved) return;
+    if (stopped || !saved) return;
     if (running) { runAgain = true; return; }
     running = true;
     try {
       const next = options.snapshot();
       const ops = diff(saved, next);
       if (ops.length) await options.apply(ops);
+      if (stopped) return;
       saved = next;
       failed = false;
       attempt = 0;
       if (!runAgain && !timer) options.onStatus({ state: 'saved', at: new Date() });
     } catch (err) {
+      if (stopped) return;
       // Keep `saved` as it was: the retry recomputes the same differences, and every write can be
       // repeated safely, so a partly applied attempt still ends up right.
       failed = true;
@@ -139,6 +150,7 @@ export function createSyncer(options: SyncerOptions): Syncer {
 
   return {
     reset(snapshot) {
+      if (stopped) return;
       if (timer) clearTimeout(timer);
       timer = null;
       saved = snapshot;
@@ -147,9 +159,16 @@ export function createSyncer(options: SyncerOptions): Syncer {
       options.onStatus({ state: 'saved', at: null });
     },
     changed() {
+      if (stopped) return;
       if (!failed) options.onStatus({ state: 'saving' });
       schedule(debounceMs);
     },
-    pending: () => timer !== null || running || failed,
+    pending: () => !stopped && (timer !== null || running || failed),
+    stop() {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+      timer = null;
+      runAgain = false;
+    },
   };
 }

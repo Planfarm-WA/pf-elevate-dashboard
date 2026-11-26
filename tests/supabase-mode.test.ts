@@ -36,6 +36,7 @@ async function start(options: FakeOptions, retryMs = [20]) {
 
 const visible = (selector: string) => !$(selector).hidden;
 const saveStatus = () => $('#last-updated-display').textContent ?? '';
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 beforeEach(() => {
   vi.resetModules();
@@ -159,6 +160,85 @@ describe('leaving', () => {
     act('signOut');
     await vi.waitFor(() => expect(visible('#login-screen')).toBe(true));
     expect(await fake.backend.currentUser()).toBeNull();
+  });
+
+  it('stops saving a business once you switch away, even while a save is retrying', async () => {
+    history.replaceState(null, '', '/?business=b1');
+    const fake = await start({ ...STAFF, signedIn: 'staff@test.local' }, [200]);
+    fake.failNext();
+    act('setStatus120', { periodId: 'a-p1', itemId: 'a-x1', status: 'complete' });
+    await vi.waitFor(() => expect(saveStatus()).toContain('Not saved'));
+
+    act('switchBusiness');
+    expect(confirm).toHaveBeenCalledWith("Some changes haven't been saved yet. Leave anyway?");
+    await vi.waitFor(() => expect(visible('#business-picker')).toBe(true));
+    act('openBusiness', { businessId: 'b2' });
+    await vi.waitFor(() => expect($('.header-client h1').textContent).toBe('Beta Farm'));
+
+    // Well past the old business's retry: the unsaved edit is dropped, and neither business changes.
+    await sleep(500);
+    expect(fake.applied).toEqual([]);
+    expect(Object.keys(fake.rows('b1').periods)).toEqual(['a-p1']);
+    expect(fake.rows('b1').priorities).toEqual({ 'a-x1': expect.objectContaining({ status: 'none' }) });
+    expect(Object.keys(fake.rows('b2').periods)).toEqual(['b-p1']);
+    expect(saveStatus()).toBe('SavedAll changes saved');
+  });
+
+  it('stops saving a business at Sign out, so logging straight back in leaves its rows alone', async () => {
+    history.replaceState(null, '', '/?business=b1');
+    const fake = await start({ ...STAFF, signedIn: 'staff@test.local' }, [200]);
+    fake.failNext();
+    act('setStatus120', { periodId: 'a-p1', itemId: 'a-x1', status: 'complete' });
+    await vi.waitFor(() => expect(saveStatus()).toContain('Not saved'));
+
+    act('signOut');
+    await vi.waitFor(() => expect(visible('#login-screen')).toBe(true));
+    // Staff get the list after logging in, so nothing is open and `state` is still empty.
+    setValue('#login-email', 'staff@test.local');
+    setValue('#login-password', 'staff-pw');
+    act('logIn', {}, 'submit');
+    await vi.waitFor(() => expect(visible('#business-picker')).toBe(true));
+
+    await sleep(500);
+    expect(fake.applied).toEqual([]);
+    expect(Object.keys(fake.rows('b1').periods)).toEqual(['a-p1']);
+    expect(Object.keys(fake.rows('b1').priorities)).toEqual(['a-x1']);
+  });
+
+  it('asks before leaving during an import, and keeps the import out of the next business', async () => {
+    history.replaceState(null, '', '/?business=b1');
+    const fake = await start({ ...STAFF, signedIn: 'staff@test.local' });
+    // Hold the import on its way to the database until the test lets it finish.
+    let finishImport = () => {};
+    const realImport = fake.backend.importFile.bind(fake.backend);
+    fake.backend.importFile = async (id, file) => {
+      await new Promise<void>((resolve) => { finishImport = resolve; });
+      await realImport(id, file);
+    };
+    const file = new File([JSON.stringify({
+      version: 3,
+      blueprint: { tenyear: '', threeyear: '', values: [], oneyear: [], purpose: 'Imported purpose', issues: [] },
+    })], 'backup.json');
+    const input = $('input[type="file"]');
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(() => expect(confirm).toHaveBeenCalledWith('This will replace all current data. Continue?'));
+
+    act('switchBusiness');
+    expect(confirm).toHaveBeenLastCalledWith("Some changes haven't been saved yet. Leave anyway?");
+    await vi.waitFor(() => expect(visible('#business-picker')).toBe(true));
+    act('openBusiness', { businessId: 'b2' });
+    await vi.waitFor(() => expect($('.header-client h1').textContent).toBe('Beta Farm'));
+
+    // The import still lands in the business it was started in, but isn't loaded into this one.
+    finishImport();
+    await vi.waitFor(() => expect(fake.rows('b1').blueprint.purpose).toBe('Imported purpose'));
+    await sleep(50);
+    expect($('#bp-purpose-body').textContent).toBe('b purpose');
+    act('setStatus120', { periodId: 'b-p1', itemId: 'b-x1', status: 'on-track' });
+    await vi.waitFor(() => expect(fake.rows('b2').priorities['b-x1'].status).toBe('on-track'));
+    expect(Object.keys(fake.rows('b2').periods)).toEqual(['b-p1']);
+    expect(fake.rows('b2').blueprint.purpose).toBe('b purpose');
   });
 });
 
