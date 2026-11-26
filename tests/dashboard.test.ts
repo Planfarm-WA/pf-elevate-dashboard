@@ -594,18 +594,6 @@ describe('coaching sessions', () => {
     expect(alert).toHaveBeenCalledWith('Please enter at least a date and focus.');
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
   });
-
-  it('adds Session Notes to the page without saving them', async () => {
-    await startApp();
-    setValue('#note-date', '1 May');
-    setValue('#note-who', 'Sam');
-    setValue('#note-text', 'Talked about water');
-    act('addNote');
-    expect($('#session-notes-list').textContent).toContain('1 May — Sam');
-    expect($('#session-notes-list').textContent).toContain('Talked about water');
-    expect(value('#note-text')).toBe('');
-    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
-  });
 });
 
 describe('export and import', () => {

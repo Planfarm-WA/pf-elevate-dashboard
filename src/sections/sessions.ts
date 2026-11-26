@@ -1,5 +1,4 @@
-// The Coaching Sessions tab: the sessions table, the session dialog (#session-edit-overlay)
-// and the Session Notes card.
+// The Coaching Sessions tab: the sessions table and the session dialog (#session-edit-overlay).
 
 import { str, type Actions } from '../actions.ts';
 import { byId } from '../dom.ts';
@@ -83,27 +82,11 @@ export function closeSessionEditModal(): void {
   isNewSession = false;
 }
 
-/** The Session Notes card. The note is only added to the page; it isn't saved. */
-function addNote(): void {
-  const date = byId<HTMLInputElement>('note-date').value.trim();
-  const who = byId<HTMLInputElement>('note-who').value.trim();
-  const text = byId<HTMLTextAreaElement>('note-text').value.trim();
-  if (!text) return;
-  const div = document.createElement('div');
-  div.style.marginBottom = '16px';
-  div.innerHTML = `<div style="font-size:12px;font-weight:700;color:var(--teal-dark);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">${esc(date || 'Undated')}${who ? ' — ' + esc(who) : ''}</div><div style="font-size:13px;color:var(--grey-mid);background:var(--grey-bg);padding:12px;border-radius:8px;line-height:1.7">${esc(text)}</div>`;
-  byId('session-notes-list').appendChild(div);
-  byId<HTMLInputElement>('note-date').value = '';
-  byId<HTMLInputElement>('note-who').value = '';
-  byId<HTMLTextAreaElement>('note-text').value = '';
-}
-
-/** The sessions buttons: Add Session, each row's Edit, the session dialog and Save Note. */
+/** The sessions buttons: Add Session, each row's Edit, and the session dialog. */
 export const sessionsActions: Actions = {
   showAddSessionModal,
   editSession: (el) => editSession(str(el, 'sessionId')),
   saveSessionEdit,
   deleteSession,
   closeSessionEditModal,
-  addNote,
 };

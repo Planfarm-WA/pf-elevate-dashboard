@@ -151,7 +151,6 @@ body { font-family: 'DM Sans', sans-serif; background: var(--grey-bg); color: va
 .drag-handle:active { cursor: grabbing; }
 .print-period-btn { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.4); font-size: 12px; transition: background 0.15s; }
 .print-period-btn:hover { background: rgba(255,255,255,0.28); }
-.divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
 .label-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .label-row h3 { font-size: 13px; font-weight: 600; color: var(--grey-dark); text-transform: uppercase; letter-spacing: 0.06em; }
 .empty-state { text-align: center; padding: 40px; color: var(--grey-light); font-size: 14px; }

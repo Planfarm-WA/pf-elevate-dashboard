@@ -138,9 +138,7 @@ The period and round tabs (`tab.onclick`/`tab.ondblclick`), drag-and-drop and th
   - `oneyear` used to be strings and is now `{text, done}`. `migrateOneYear()` converts old data and must run before `oneyear` is used.
 - **`updateStats()` writes to hidden `#stat-*` divs.** The stats row was removed but these elements must stay, or the function throws.
 - **Printing.** `printPeriod120` / `printRound30` add `print-target` and `body.printing-single` for the `@media print` rules, and inject temporary status labels with `addPrintStatusSpans()`.
-- **Not persisted or unused:**
-  - The "Session Notes" card (`addNote()`) only writes to the page and is never saved.
-  - `periods120[].oneyear` (targets entered in the New Period modal) is saved but never displayed.
+- **Not displayed:** `periods120[].oneyear` (targets entered in the New Period modal) is saved but never shown.
 
 ## Export / import format
 
@@ -207,6 +205,7 @@ Then run each migration in order, e.g. `psql -v ON_ERROR_STOP=1 -f supabase/migr
   - Supabase Auth has "Allow new users to sign up" turned off, because staff create the logins.
 - Leaving a business stops its saving, so a retry can't write another business's data into it (the "Leaving a business" bullet above).
 - User text is escaped before it goes into HTML (`esc()`, see "How the page works").
+- The Session Notes card, which never saved anything, is gone. Notes go in a session's Notes field or a round's notes box.
 
 **Still to do,** roughly in order. Production (`main`) still serves the old single-file site until the merge, the last item.
 
@@ -215,10 +214,9 @@ Then run each migration in order, e.g. `psql -v ON_ERROR_STOP=1 -f supabase/migr
    - a join page, and public sign-up turned back on;
    - email sending (SMTP, e.g. Resend or Postmark) set up in Supabase Auth, together with a "forgot password" flow.
 2. **An admin screen for staff:** create businesses and see or remove client links. Creating logins needs the service-role key, so it must happen server-side (an Edge Function), never in the browser.
-3. **Session Notes card** (`addNote()`): either save the notes (which needs a table) or remove the card.
-4. **`periods120[].oneyear`:** either show it on the period panel or stop collecting it.
-5. **Maybe live updates** (Supabase Realtime), so a change on one device shows up on another without reloading. Today the last write wins per row.
-6. **Merge `supabase-schema` into `main` (production).** Clients' current data is in their own browsers on the old site, so first:
+3. **`periods120[].oneyear`:** either show it on the period panel or stop collecting it.
+4. **Maybe live updates** (Supabase Realtime), so a change on one device shows up on another without reloading. Today the last write wins per row.
+5. **Merge `supabase-schema` into `main` (production).** Clients' current data is in their own browsers on the old site, so first:
    - give every client a login (README "Adding a client (staff)");
    - import each client's export file with `pnpm import-dashboard`.
 

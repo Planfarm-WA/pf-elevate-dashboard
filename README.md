@@ -34,7 +34,7 @@ If two people edit the *same* item at the same moment, the last change wins. Cha
 
 **Printing.** 🖨 Print in the header prints the whole dashboard. The Print button on a period or round prints just that one.
 
-**Known gap.** Notes typed into the *Session Notes* card are not saved. Use the coaching notes box on each 30-day round, or the Notes field on a session, instead.
+**Notes** go in the coaching notes box on each 30-day round, or in a session's Notes field (✏️ Edit on the session).
 
 ### Adding a client (staff)
 
