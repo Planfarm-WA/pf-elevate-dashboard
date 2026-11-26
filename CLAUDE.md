@@ -205,7 +205,7 @@ Then run each migration in order, e.g. `psql -v ON_ERROR_STOP=1 -f supabase/migr
   - Supabase Auth has "Allow new users to sign up" turned off, because staff create the logins.
 - Leaving a business stops its saving, so a retry can't write another business's data into it (the "Leaving a business" bullet above).
 - User text is escaped before it goes into HTML (`esc()`, see "How the page works").
-- The Session Notes card, which never saved anything, is gone. Notes go in a session's Notes field or a round's notes box.
+- The Session Notes card, which never saved anything, is gone. Notes go in a session's Notes field or a round's notes box. Its markup, code, style and test are kept in `archive/session-notes-card.md`, with how to bring it back.
 
 **Still to do,** roughly in order. Production (`main`) still serves the old single-file site until the merge, the last item.
 

@@ -186,5 +186,6 @@ tests/                Tests (`pnpm test`): the page in a simulated browser (loca
 tsconfig.json         TypeScript settings (`pnpm typecheck`)
 eslint.config.js      Lint rules (`pnpm lint`)
 supabase/migrations/  Database tables and access rules for Supabase (CLI migrations)
+archive/              Removed features kept for reference, with how to bring them back (not built)
 CLAUDE.md             Notes for Claude Code when working on this repository
 ```
