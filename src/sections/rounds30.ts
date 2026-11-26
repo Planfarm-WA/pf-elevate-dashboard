@@ -4,6 +4,7 @@
 import { num, oneOf, str, type Actions } from '../actions.ts';
 import { byId } from '../dom.ts';
 import { initDragTable } from '../drag.ts';
+import { esc } from '../html.ts';
 import { newId } from '../ids.ts';
 import { openEditModal } from '../edit-modal.ts';
 import { state } from '../state.ts';
@@ -34,7 +35,8 @@ export function render30(): void {
     const panel = document.createElement('div');
     panel.id = `panel-${round.id}`;
     panel.className = `round-panel ${isActive ? 'active' : ''}`;
-    panel.innerHTML = `<div class="card"><div class="card-header" style="justify-content:space-between;"><div style="display:flex;align-items:center;gap:10px"><span class="icon">✅</span><h2>${round.label} — ${round.period}</h2></div><div style="display:flex;gap:6px;align-items:center;"><button class="btn btn-sm print-period-btn" data-click="printRound30" data-round-id="${round.id}" title="Print this round">🖨 Print</button><button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.4);font-size:12px;" data-click="addTask30" data-round-id="${round.id}">＋ Add Task</button></div></div><div class="progress-wrap"><div class="progress-label"><span>Progress</span><span id="prog-30-text-${round.id}">${done} of ${round.tasks.length} complete</span></div><div class="progress-bar"><div class="progress-fill" id="prog-30-bar-${round.id}" style="width:${pct}%"></div></div></div><table class="priority-table"><thead><tr><th style="width:20px"></th><th>Status</th><th>What</th><th style="width:100px">Who</th><th style="width:110px">By When</th><th style="width:80px">Actions</th></tr></thead><tbody id="tasks-${round.id}"></tbody></table><div class="status-legend"><span class="legend-item"><span class="legend-dot dot-on-track"></span> On Track</span><span class="legend-item"><span class="legend-dot dot-off-track"></span> Off Track</span><span class="legend-item"><span class="legend-dot dot-complete"></span> Complete</span><span style="margin-left:auto;font-size:11px;color:var(--grey-light)">💡 Use "Push →" on incomplete tasks to carry into next round</span></div><div style="padding:16px 20px;border-top:1px solid var(--border)"><label style="font-size:12px;font-weight:600;color:var(--grey-dark);display:block;margin-bottom:6px">Coaching session notes for this round</label><textarea class="coaching-area" id="notes-${round.id}" placeholder="Notes from the coaching session reviewing this round…" data-input="saveRoundNotes" data-round-id="${round.id}">${round.notes || ''}</textarea></div></div>`;
+    const rid = esc(round.id);
+    panel.innerHTML = `<div class="card"><div class="card-header" style="justify-content:space-between;"><div style="display:flex;align-items:center;gap:10px"><span class="icon">✅</span><h2>${esc(round.label)} — ${esc(round.period)}</h2></div><div style="display:flex;gap:6px;align-items:center;"><button class="btn btn-sm print-period-btn" data-click="printRound30" data-round-id="${rid}" title="Print this round">🖨 Print</button><button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.4);font-size:12px;" data-click="addTask30" data-round-id="${rid}">＋ Add Task</button></div></div><div class="progress-wrap"><div class="progress-label"><span>Progress</span><span id="prog-30-text-${rid}">${done} of ${round.tasks.length} complete</span></div><div class="progress-bar"><div class="progress-fill" id="prog-30-bar-${rid}" style="width:${pct}%"></div></div></div><table class="priority-table"><thead><tr><th style="width:20px"></th><th>Status</th><th>What</th><th style="width:100px">Who</th><th style="width:110px">By When</th><th style="width:80px">Actions</th></tr></thead><tbody id="tasks-${rid}"></tbody></table><div class="status-legend"><span class="legend-item"><span class="legend-dot dot-on-track"></span> On Track</span><span class="legend-item"><span class="legend-dot dot-off-track"></span> Off Track</span><span class="legend-item"><span class="legend-dot dot-complete"></span> Complete</span><span style="margin-left:auto;font-size:11px;color:var(--grey-light)">💡 Use "Push →" on incomplete tasks to carry into next round</span></div><div style="padding:16px 20px;border-top:1px solid var(--border)"><label style="font-size:12px;font-weight:600;color:var(--grey-dark);display:block;margin-bottom:6px">Coaching session notes for this round</label><textarea class="coaching-area" id="notes-${rid}" placeholder="Notes from the coaching session reviewing this round…" data-input="saveRoundNotes" data-round-id="${rid}">${esc(round.notes || '')}</textarea></div></div>`;
     panelsEl.appendChild(panel);
     renderRoundTasks(round.id);
   });
@@ -49,11 +51,12 @@ export function renderRoundTasks(roundId: string): void {
   round.tasks.forEach((t) => {
     if (t.status === 'complete') done++;
     const canPush = t.status !== 'complete' && !t.pushed;
-    const pushBtn = canPush ? `<button class="push-btn" data-click="pushTask" data-round-id="${roundId}" data-task-id="${t.id}">Push →</button>` : t.pushed ? `<span class="push-btn pushed">Pushed ✓</span>` : '';
+    const ids = `data-round-id="${esc(roundId)}" data-task-id="${esc(t.id)}"`;
+    const pushBtn = canPush ? `<button class="push-btn" data-click="pushTask" ${ids}>Push →</button>` : t.pushed ? `<span class="push-btn pushed">Pushed ✓</span>` : '';
     const tr = document.createElement('tr');
     tr.className = t.status === 'complete' ? 'status-complete' : t.status === 'off-track' ? 'status-off-track' : '';
     tr.setAttribute('draggable', 'true'); tr.setAttribute('data-id', t.id);
-    tr.innerHTML = `<td style="width:20px;cursor:grab;color:var(--grey-light);font-size:16px;text-align:center" class="drag-handle">⠿</td><td><div class="status-btns"><button class="status-btn ${t.status === 'on-track' ? 'active-on-track' : ''}" data-click="setStatus30" data-round-id="${roundId}" data-task-id="${t.id}" data-status="on-track">✓ On Track</button><button class="status-btn ${t.status === 'off-track' ? 'active-off-track' : ''}" data-click="setStatus30" data-round-id="${roundId}" data-task-id="${t.id}" data-status="off-track">✗ Off Track</button><button class="status-btn ${t.status === 'complete' ? 'active-complete' : ''}" data-click="setStatus30" data-round-id="${roundId}" data-task-id="${t.id}" data-status="complete">★ Complete</button></div></td><td class="${t.status === 'complete' ? 'task-text' : ''}">${t.what}${t.pushed ? '<span class="pushed-label">Pushed →</span>' : ''}</td><td>${badgeFor(t.who)}</td><td style="font-size:12px;color:var(--grey-light);white-space:nowrap">${t.when}</td><td style="display:flex;gap:4px;align-items:center;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" data-click="editItem30" data-round-id="${roundId}" data-task-id="${t.id}">✏️</button><button class="btn btn-danger btn-sm" data-click="deleteTask30" data-round-id="${roundId}" data-task-id="${t.id}">🗑</button>${pushBtn}</td>`;
+    tr.innerHTML = `<td style="width:20px;cursor:grab;color:var(--grey-light);font-size:16px;text-align:center" class="drag-handle">⠿</td><td><div class="status-btns"><button class="status-btn ${t.status === 'on-track' ? 'active-on-track' : ''}" data-click="setStatus30" ${ids} data-status="on-track">✓ On Track</button><button class="status-btn ${t.status === 'off-track' ? 'active-off-track' : ''}" data-click="setStatus30" ${ids} data-status="off-track">✗ Off Track</button><button class="status-btn ${t.status === 'complete' ? 'active-complete' : ''}" data-click="setStatus30" ${ids} data-status="complete">★ Complete</button></div></td><td class="${t.status === 'complete' ? 'task-text' : ''}">${esc(t.what)}${t.pushed ? '<span class="pushed-label">Pushed →</span>' : ''}</td><td>${badgeFor(t.who)}</td><td style="font-size:12px;color:var(--grey-light);white-space:nowrap">${esc(t.when)}</td><td style="display:flex;gap:4px;align-items:center;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" data-click="editItem30" ${ids}>✏️</button><button class="btn btn-danger btn-sm" data-click="deleteTask30" ${ids}>🗑</button>${pushBtn}</td>`;
     tbody.appendChild(tr);
   });
   const pct = round.tasks.length ? Math.round(done / round.tasks.length * 100) : 0;
@@ -127,7 +130,7 @@ function editItem30(roundId: string, taskId: string): void {
   const t = round.tasks.find((x) => x.id === taskId); if (!t) return;
   openEditModal(
     'Edit 30-Day Task',
-    `<div class="edit-field"><label>What</label><textarea id="ef-what" style="min-height:80px">${t.what}</textarea></div><div class="edit-field"><label>Who</label><input id="ef-who" value="${t.who}" placeholder="e.g. Newms, Ommers" list="who-suggestions"></div><div class="edit-field"><label>By When</label><input id="ef-when" value="${t.when}"></div>`,
+    `<div class="edit-field"><label>What</label><textarea id="ef-what" style="min-height:80px">${esc(t.what)}</textarea></div><div class="edit-field"><label>Who</label><input id="ef-who" value="${esc(t.who)}" placeholder="e.g. Newms, Ommers" list="who-suggestions"></div><div class="edit-field"><label>By When</label><input id="ef-when" value="${esc(t.when)}"></div>`,
     ({ what, who, when }) => {
       const round = state.rounds.find((r) => r.id === roundId);
       if (round) { const t = round.tasks.find((x) => x.id === taskId); if (t) { t.what = what; t.who = who; t.when = when; } }
@@ -141,7 +144,7 @@ function renameRound(roundId: string): void {
   const round = state.rounds.find((r) => r.id === roundId); if (!round) return;
   openEditModal(
     'Rename Round',
-    `<div class="edit-field"><label>Round Name</label><input id="ef-what" value="${round.label}"></div><div class="edit-field"><label>Date Range</label><input id="ef-when" value="${round.period}"></div>`,
+    `<div class="edit-field"><label>Round Name</label><input id="ef-what" value="${esc(round.label)}"></div><div class="edit-field"><label>Date Range</label><input id="ef-when" value="${esc(round.period)}"></div>`,
     ({ what, when }) => {
       const round = state.rounds.find((r) => r.id === roundId);
       if (round) { round.label = what; if (when) round.period = when; }
@@ -161,7 +164,7 @@ function showNewRoundModal(): void {
   tempTaskRows = []; byId<HTMLInputElement>('new-round-label').value = ''; byId<HTMLInputElement>('new-round-period').value = ''; byId('task-rows').innerHTML = '';
   const pending = state.pendingPushes || [];
   const notice = byId('pushed-tasks-notice');
-  if (pending.length > 0) { notice.style.display = 'block'; notice.innerHTML = `<strong>📋 ${pending.length} task${pending.length > 1 ? 's' : ''} will be carried over:</strong><ul style="margin-top:6px;padding-left:18px">${pending.map((p) => `<li>${p.what}</li>`).join('')}</ul>`; } else notice.style.display = 'none';
+  if (pending.length > 0) { notice.style.display = 'block'; notice.innerHTML = `<strong>📋 ${pending.length} task${pending.length > 1 ? 's' : ''} will be carried over:</strong><ul style="margin-top:6px;padding-left:18px">${pending.map((p) => `<li>${esc(p.what)}</li>`).join('')}</ul>`; } else notice.style.display = 'none';
   addTaskRow(); addTaskRow(); addTaskRow();
   byId('modal-overlay').style.display = 'flex';
 }

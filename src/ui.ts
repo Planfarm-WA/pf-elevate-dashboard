@@ -1,5 +1,7 @@
 // Small UI pieces shared by the sections: toasts, the completion sound and the Who badges.
 
+import { esc } from './html.ts';
+
 /** Show a message in the bottom-right corner for about 3 seconds. */
 export function showToast(msg: string): void {
   const t = document.createElement('div');
@@ -47,7 +49,11 @@ export function playBing(): void {
   }
 }
 
-/** Coloured badges for a "Who" value. Several names can be separated by "/", "," or "&". */
+/**
+ * Coloured badges for a "Who" value, as HTML. Several names can be separated by "/", "," or "&".
+ * The raw value is split and hashed first, and each name is escaped only when it goes into the
+ * HTML, so an `&` still separates names and the colours don't depend on escaping.
+ */
 export function badgeFor(who: string): string {
   if (!who) return '';
   const palette = ['badge-rob', 'badge-kellie', 'badge-paul', 'badge-peter', 'badge-robkellie', 'badge-team'];
@@ -56,6 +62,6 @@ export function badgeFor(who: string): string {
     let hash = 0;
     for (let i = 0; i < w.length; i++) hash = (hash * 31 + w.charCodeAt(i)) >>> 0;
     const cls = palette[hash % palette.length];
-    return `<span class="badge ${cls}">${w}</span>`;
+    return `<span class="badge ${cls}">${esc(w)}</span>`;
   }).join(' ');
 }

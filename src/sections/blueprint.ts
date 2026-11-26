@@ -5,6 +5,7 @@ import { num, oneOf, type Actions } from '../actions.ts';
 import { byId } from '../dom.ts';
 import { initDragList } from '../drag.ts';
 import { openEditModal } from '../edit-modal.ts';
+import { esc } from '../html.ts';
 import { state } from '../state.ts';
 import { save } from '../persistence.ts';
 import type { OneYearTarget } from '../types.ts';
@@ -23,10 +24,10 @@ function isTextSection(section: BpSection | null): section is BpTextSection {
 
 export function renderBlueprint(): void {
   const bp = state.blueprint;
-  byId('bp-tenyear-body').innerHTML = bp.tenyear.split('\n\n').map((p) => `<p>${p}</p>`).join('');
+  byId('bp-tenyear-body').innerHTML = bp.tenyear.split('\n\n').map((p) => `<p>${esc(p)}</p>`).join('');
   renderThreeYearTargets();
-  byId('bp-purpose-body').innerHTML = `<p>${bp.purpose}</p>`;
-  byId('bp-values-body').innerHTML = bp.values.map((v) => `<span class="value-pill">${v}</span>`).join('');
+  byId('bp-purpose-body').innerHTML = `<p>${esc(bp.purpose)}</p>`;
+  byId('bp-values-body').innerHTML = bp.values.map((v) => `<span class="value-pill">${esc(v)}</span>`).join('');
   renderOneYearTargets();
 }
 
@@ -49,7 +50,7 @@ function renderOneYearTargets(): void {
     return `<li data-idx="${idx}" draggable="true" style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);${done ? 'opacity:0.6' : ''}">
       <span class="drag-handle" title="Drag to reorder" style="flex-shrink:0">⠿</span>
       <button data-click="toggleOneYearDone" data-idx="${idx}" title="${done ? 'Mark incomplete' : 'Mark complete'}" style="flex-shrink:0;width:22px;height:22px;border-radius:50%;border:2px solid ${done ? 'var(--lime)' : 'var(--teal-mid)'};background:${done ? 'var(--lime)' : 'white'};cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:all 0.15s;">${done ? '<span style="color:white;font-size:13px;line-height:1">✓</span>' : ''}</button>
-      <span style="flex:1;font-size:14px;color:var(--grey-mid);line-height:1.5;${done ? 'text-decoration:line-through' : ''}">${item.text}</span>
+      <span style="flex:1;font-size:14px;color:var(--grey-mid);line-height:1.5;${done ? 'text-decoration:line-through' : ''}">${esc(item.text)}</span>
       <button class="btn btn-ghost btn-sm" data-click="editOneYearTarget" data-idx="${idx}" style="flex-shrink:0">✏️</button>
       <button class="btn btn-danger btn-sm" data-click="deleteOneYearTarget" data-idx="${idx}" style="flex-shrink:0">🗑</button>
     </li>`;
@@ -84,9 +85,10 @@ function addOneYearTarget(): void {
 function editOneYearTarget(idx: number): void {
   migrateOneYear();
   const item = state.blueprint.oneyear[idx];
+  if (!item) return;
   openEditModal(
     'Edit 1-Year Target',
-    `<div class="edit-field"><label>Target</label><textarea id="ef-what" style="min-height:80px">${item.text || item}</textarea></div>`,
+    `<div class="edit-field"><label>Target</label><textarea id="ef-what" style="min-height:80px">${esc(item.text)}</textarea></div>`,
     ({ what }) => {
       migrateOneYear();
       const oi = state.blueprint.oneyear[idx];
@@ -118,7 +120,7 @@ function renderThreeYearTargets(): void {
     const done = !!doneByIdx[idx];
     return `<li style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);${done ? 'opacity:0.6' : ''}">
       <button data-click="toggleThreeYearDone" data-idx="${idx}" title="${done ? 'Mark incomplete' : 'Mark complete'}" style="flex-shrink:0;margin-top:2px;width:22px;height:22px;border-radius:50%;border:2px solid ${done ? 'var(--lime)' : 'var(--teal-mid)'};background:${done ? 'var(--lime)' : 'white'};cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:all 0.15s;">${done ? '<span style="color:white;font-size:13px;line-height:1">✓</span>' : ''}</button>
-      <span style="flex:1;font-size:14px;color:var(--grey-mid);line-height:1.6;${done ? 'text-decoration:line-through' : ''}">${line}</span>
+      <span style="flex:1;font-size:14px;color:var(--grey-mid);line-height:1.6;${done ? 'text-decoration:line-through' : ''}">${esc(line)}</span>
     </li>`;
   }).join('') + '</ul>';
 }
@@ -145,11 +147,11 @@ function editBlueprint(section: BpSection): void {
   byId('bp-edit-title').textContent = 'Edit: ' + titles[section];
   const fieldsEl = byId('bp-edit-fields');
   if (isTextSection(section)) {
-    fieldsEl.innerHTML = `<div class="edit-field"><label>Content (use blank lines to separate paragraphs)</label><textarea id="bp-edit-val" style="min-height:180px">${bp[section]}</textarea></div>`;
+    fieldsEl.innerHTML = `<div class="edit-field"><label>Content (use blank lines to separate paragraphs)</label><textarea id="bp-edit-val" style="min-height:180px">${esc(bp[section])}</textarea></div>`;
   } else if (section === 'values') {
-    fieldsEl.innerHTML = `<div class="edit-field"><label>Values (one per line)</label><textarea id="bp-edit-val" style="min-height:140px">${bp.values.join('\n')}</textarea></div>`;
+    fieldsEl.innerHTML = `<div class="edit-field"><label>Values (one per line)</label><textarea id="bp-edit-val" style="min-height:140px">${esc(bp.values.join('\n'))}</textarea></div>`;
   } else if (section === 'issues') {
-    fieldsEl.innerHTML = `<div class="edit-field"><label>Issues &amp; Opportunities (one per line — prefix with OPPORTUNITY: for green highlight)</label><textarea id="bp-edit-val" style="min-height:200px">${bp.issues.join('\n')}</textarea></div>`;
+    fieldsEl.innerHTML = `<div class="edit-field"><label>Issues &amp; Opportunities (one per line — prefix with OPPORTUNITY: for green highlight)</label><textarea id="bp-edit-val" style="min-height:200px">${esc(bp.issues.join('\n'))}</textarea></div>`;
   }
   byId('bp-edit-overlay').classList.add('open');
 }

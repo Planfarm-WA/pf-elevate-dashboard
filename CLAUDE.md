@@ -29,6 +29,7 @@ src/
   types.ts          the saved data: State, Period120, Round30, Item, Session, Blueprint, ExportFile, …, plus STATUSES
   state.ts          `state`, the single shared object, and emptyState()
   dom.ts            byId<T>(): typed getElementById that throws "Missing element #id"
+  html.ts           esc(): escapes text for the HTML template strings (see "How the page works")
   ui.ts             showToast(), playBing(), badgeFor()
   stats.ts          updateStats() (the hidden #stat-* divs)
   drag.ts           initDragTable(), initDragList()
@@ -119,7 +120,11 @@ The period and round tabs (`tab.onclick`/`tab.ondblclick`), drag-and-drop and th
 - **Render functions rebuild `innerHTML` from `state`:** `renderBlueprint`, `renderOneYearTargets`, `renderThreeYearTargets`, `render120Periods` / `renderPeriodPriorities`, `render30` / `renderRoundTasks`, `renderSessions`, `renderIssues`. `showSection()` re-renders a tab when it is opened.
 - **Variables used by only one area stay private to its module**, for example `currentSessionId` in `sessions.ts`, `currentBpSection` in `blueprint.ts`, and `dragSrc` in `drag.ts`.
 - **IDs are UUID strings** (`newId()`). They travel as `data-*` attributes (see "Event handling" above) and are read back with `str()`. `num()` is for numbers such as list positions (`data-idx`) and dialog row numbers.
-- **User text goes into `innerHTML` and `value="..."` attributes without escaping.** A quote or `<` in user input can break the edit forms.
+- **Text in template strings goes through `esc()`** (`src/html.ts`). This covers every value from `state`, the database or a form input that goes into an HTML string set with `innerHTML`: element text, quoted attributes (`value`, `id`, `data-*`) and textarea content.
+  - Without it, a `<` or `"` becomes part of the page. It cuts a field short in an edit dialog, or adds elements and event handlers that run code for everyone who opens the business.
+  - Escape after splitting text, never before. `badgeFor()` splits the raw "Who" on `/ , &`, then escapes each name.
+  - Text set through DOM properties (`textContent`, `.value`, `dataset`, as in `session.ts`) needs nothing.
+  - The "user text" tests in `tests/dashboard.test.ts` put HTML characters into every field and check that each shows and saves back unchanged. A new field shown on the page belongs in that fixture.
 - **Shared modals.** `#edit-overlay` serves many item types: adding, editing and renaming priorities, tasks, periods, rounds and 1-year targets.
   - Each opener calls `openEditModal(title, fieldsHtml, onSave)` (`src/edit-modal.ts`) and passes its own save logic.
   - `saveEdit()` reads `#ef-what` (always present) and `#ef-who`/`#ef-when` (`''` when absent). It does nothing while "what" is empty, otherwise runs `onSave` and closes the dialog.
@@ -200,19 +205,20 @@ Then run each migration in order, e.g. `psql -v ON_ERROR_STOP=1 -f supabase/migr
   - Vercel has `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` for Production and Preview.
   - The Vercel project builds with Vite: install `pnpm install`, build `vite build`, output `dist`.
   - Supabase Auth has "Allow new users to sign up" turned off, because staff create the logins.
+- Leaving a business stops its saving, so a retry can't write another business's data into it (the "Leaving a business" bullet above).
+- User text is escaped before it goes into HTML (`esc()`, see "How the page works").
 
 **Still to do,** roughly in order. Production (`main`) still serves the old single-file site until the merge, the last item.
 
-1. **Escape user text** before it goes into `innerHTML` and `value="..."` attributes. A quote or `<` breaks the forms, and with shared data one user's text now reaches other users.
-2. **Per-business sign-up links**, so clients set their own password. This needs:
+1. **Per-business sign-up links**, so clients set their own password. This needs:
    - an `invites` table plus a `security definer` function that links the new login to the business;
    - a join page, and public sign-up turned back on;
    - email sending (SMTP, e.g. Resend or Postmark) set up in Supabase Auth, together with a "forgot password" flow.
-3. **An admin screen for staff:** create businesses and see or remove client links. Creating logins needs the service-role key, so it must happen server-side (an Edge Function), never in the browser.
-4. **Session Notes card** (`addNote()`): either save the notes (which needs a table) or remove the card.
-5. **`periods120[].oneyear`:** either show it on the period panel or stop collecting it.
-6. **Maybe live updates** (Supabase Realtime), so a change on one device shows up on another without reloading. Today the last write wins per row.
-7. **Merge `supabase-schema` into `main` (production).** Clients' current data is in their own browsers on the old site, so first:
+2. **An admin screen for staff:** create businesses and see or remove client links. Creating logins needs the service-role key, so it must happen server-side (an Edge Function), never in the browser.
+3. **Session Notes card** (`addNote()`): either save the notes (which needs a table) or remove the card.
+4. **`periods120[].oneyear`:** either show it on the period panel or stop collecting it.
+5. **Maybe live updates** (Supabase Realtime), so a change on one device shows up on another without reloading. Today the last write wins per row.
+6. **Merge `supabase-schema` into `main` (production).** Clients' current data is in their own browsers on the old site, so first:
    - give every client a login (README "Adding a client (staff)");
    - import each client's export file with `pnpm import-dashboard`.
 

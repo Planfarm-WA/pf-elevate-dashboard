@@ -4,6 +4,7 @@
 import { num, oneOf, str, type Actions } from '../actions.ts';
 import { byId } from '../dom.ts';
 import { initDragTable } from '../drag.ts';
+import { esc } from '../html.ts';
 import { newId } from '../ids.ts';
 import { openEditModal } from '../edit-modal.ts';
 import { state } from '../state.ts';
@@ -34,7 +35,8 @@ export function render120Periods(): void {
     const panel = document.createElement('div');
     panel.id = `ppanel-${period.id}`;
     panel.className = `round-panel ${isActive ? 'active' : ''}`;
-    panel.innerHTML = `<div class="card"><div class="card-header" style="justify-content:space-between;"><div style="display:flex;align-items:center;gap:10px"><span class="icon">⚡</span><h2>${period.label} — ${period.period}</h2></div><div style="display:flex;gap:6px;align-items:center;"><button class="btn btn-sm print-period-btn" data-click="printPeriod120" data-period-id="${period.id}" title="Print this period">🖨 Print</button><button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.4);font-size:12px;" data-click="addPriority120" data-period-id="${period.id}">＋ Add Priority</button></div></div><div class="progress-wrap"><div class="progress-label"><span>Progress</span><span id="prog-120-text-${period.id}">${done} of ${period.priorities.length} complete</span></div><div class="progress-bar"><div class="progress-fill" id="prog-120-bar-${period.id}" style="width:${pct}%"></div></div></div><table class="priority-table"><thead><tr><th style="width:20px"></th><th>Status</th><th>What</th><th style="width:100px">Who</th><th style="width:100px">By When</th><th style="width:90px"></th></tr></thead><tbody id="body-120-${period.id}"></tbody></table><div class="status-legend"><span class="legend-item"><span class="legend-dot dot-on-track"></span> On Track</span><span class="legend-item"><span class="legend-dot dot-off-track"></span> Off Track</span><span class="legend-item"><span class="legend-dot dot-complete"></span> Complete</span><span style="margin-left:auto;font-size:11px;color:var(--grey-light)">💡 Use "Push →" to carry items into the next period</span></div></div>`;
+    const pid = esc(period.id);
+    panel.innerHTML = `<div class="card"><div class="card-header" style="justify-content:space-between;"><div style="display:flex;align-items:center;gap:10px"><span class="icon">⚡</span><h2>${esc(period.label)} — ${esc(period.period)}</h2></div><div style="display:flex;gap:6px;align-items:center;"><button class="btn btn-sm print-period-btn" data-click="printPeriod120" data-period-id="${pid}" title="Print this period">🖨 Print</button><button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.4);font-size:12px;" data-click="addPriority120" data-period-id="${pid}">＋ Add Priority</button></div></div><div class="progress-wrap"><div class="progress-label"><span>Progress</span><span id="prog-120-text-${pid}">${done} of ${period.priorities.length} complete</span></div><div class="progress-bar"><div class="progress-fill" id="prog-120-bar-${pid}" style="width:${pct}%"></div></div></div><table class="priority-table"><thead><tr><th style="width:20px"></th><th>Status</th><th>What</th><th style="width:100px">Who</th><th style="width:100px">By When</th><th style="width:90px"></th></tr></thead><tbody id="body-120-${pid}"></tbody></table><div class="status-legend"><span class="legend-item"><span class="legend-dot dot-on-track"></span> On Track</span><span class="legend-item"><span class="legend-dot dot-off-track"></span> Off Track</span><span class="legend-item"><span class="legend-dot dot-complete"></span> Complete</span><span style="margin-left:auto;font-size:11px;color:var(--grey-light)">💡 Use "Push →" to carry items into the next period</span></div></div>`;
     panelsEl.appendChild(panel);
     renderPeriodPriorities(period.id);
   });
@@ -51,11 +53,12 @@ export function renderPeriodPriorities(periodId: string): void {
   period.priorities.forEach((p) => {
     if (p.status === 'complete') done++;
     const canPush = p.status !== 'complete' && !p.pushed;
-    const pushBtn = canPush ? `<button class="push-btn" data-click="pushPriority120" data-period-id="${periodId}" data-item-id="${p.id}">Push →</button>` : p.pushed ? `<span class="push-btn pushed">Pushed ✓</span>` : '';
+    const ids = `data-period-id="${esc(periodId)}" data-item-id="${esc(p.id)}"`;
+    const pushBtn = canPush ? `<button class="push-btn" data-click="pushPriority120" ${ids}>Push →</button>` : p.pushed ? `<span class="push-btn pushed">Pushed ✓</span>` : '';
     const tr = document.createElement('tr');
     tr.className = p.status === 'complete' ? 'status-complete' : p.status === 'off-track' ? 'status-off-track' : '';
     tr.setAttribute('draggable', 'true'); tr.setAttribute('data-id', p.id);
-    tr.innerHTML = `<td style="width:20px;cursor:grab;color:var(--grey-light);font-size:16px;text-align:center" class="drag-handle">⠿</td><td><div class="status-btns"><button class="status-btn ${p.status === 'on-track' ? 'active-on-track' : ''}" data-click="setStatus120" data-period-id="${periodId}" data-item-id="${p.id}" data-status="on-track">✓ On Track</button><button class="status-btn ${p.status === 'off-track' ? 'active-off-track' : ''}" data-click="setStatus120" data-period-id="${periodId}" data-item-id="${p.id}" data-status="off-track">✗ Off Track</button><button class="status-btn ${p.status === 'complete' ? 'active-complete' : ''}" data-click="setStatus120" data-period-id="${periodId}" data-item-id="${p.id}" data-status="complete">★ Complete</button></div></td><td class="${p.status === 'complete' ? 'task-text' : ''}">${p.what}${p.pushed ? '<span class="pushed-label">Pushed →</span>' : ''}</td><td>${badgeFor(p.who)}</td><td style="font-size:12px;color:var(--grey-light);white-space:nowrap">${p.when}</td><td style="display:flex;gap:4px;align-items:center;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" data-click="editItem120" data-period-id="${periodId}" data-item-id="${p.id}">✏️</button><button class="btn btn-danger btn-sm" data-click="deletePriority120" data-period-id="${periodId}" data-item-id="${p.id}">🗑</button>${pushBtn}</td>`;
+    tr.innerHTML = `<td style="width:20px;cursor:grab;color:var(--grey-light);font-size:16px;text-align:center" class="drag-handle">⠿</td><td><div class="status-btns"><button class="status-btn ${p.status === 'on-track' ? 'active-on-track' : ''}" data-click="setStatus120" ${ids} data-status="on-track">✓ On Track</button><button class="status-btn ${p.status === 'off-track' ? 'active-off-track' : ''}" data-click="setStatus120" ${ids} data-status="off-track">✗ Off Track</button><button class="status-btn ${p.status === 'complete' ? 'active-complete' : ''}" data-click="setStatus120" ${ids} data-status="complete">★ Complete</button></div></td><td class="${p.status === 'complete' ? 'task-text' : ''}">${esc(p.what)}${p.pushed ? '<span class="pushed-label">Pushed →</span>' : ''}</td><td>${badgeFor(p.who)}</td><td style="font-size:12px;color:var(--grey-light);white-space:nowrap">${esc(p.when)}</td><td style="display:flex;gap:4px;align-items:center;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" data-click="editItem120" ${ids}>✏️</button><button class="btn btn-danger btn-sm" data-click="deletePriority120" ${ids}>🗑</button>${pushBtn}</td>`;
     tbody.appendChild(tr);
   });
   const pct = period.priorities.length ? Math.round(done / period.priorities.length * 100) : 0;
@@ -105,7 +108,7 @@ function editItem120(periodId: string, itemId: string): void {
   const p = period.priorities.find((x) => x.id === itemId); if (!p) return;
   openEditModal(
     'Edit 120-Day Priority',
-    `<div class="edit-field"><label>What</label><textarea id="ef-what" style="min-height:80px">${p.what}</textarea></div><div class="edit-field"><label>Who</label><input id="ef-who" value="${p.who}" placeholder="e.g. Newms, Ommers" list="who-suggestions"></div><div class="edit-field"><label>By When</label><input id="ef-when" value="${p.when}"></div>`,
+    `<div class="edit-field"><label>What</label><textarea id="ef-what" style="min-height:80px">${esc(p.what)}</textarea></div><div class="edit-field"><label>Who</label><input id="ef-who" value="${esc(p.who)}" placeholder="e.g. Newms, Ommers" list="who-suggestions"></div><div class="edit-field"><label>By When</label><input id="ef-when" value="${esc(p.when)}"></div>`,
     ({ what, who, when }) => {
       const period = state.periods120.find((p) => p.id === periodId);
       if (period) { const p = period.priorities.find((x) => x.id === itemId); if (p) { p.what = what; p.who = who; p.when = when; } }
@@ -138,7 +141,7 @@ function renamePeriod120(periodId: string): void {
   const period = state.periods120.find((p) => p.id === periodId); if (!period) return;
   openEditModal(
     'Rename Period',
-    `<div class="edit-field"><label>Period Name</label><input id="ef-what" value="${period.label}"></div><div class="edit-field"><label>Date Range</label><input id="ef-when" value="${period.period}"></div>`,
+    `<div class="edit-field"><label>Period Name</label><input id="ef-what" value="${esc(period.label)}"></div><div class="edit-field"><label>Date Range</label><input id="ef-when" value="${esc(period.period)}"></div>`,
     ({ what, when }) => {
       const period = state.periods120.find((p) => p.id === periodId);
       if (period) { period.label = what; if (when) period.period = when; }
@@ -156,7 +159,7 @@ function showNew120Modal(): void {
   byId<HTMLInputElement>('new-120-label').value = ''; byId<HTMLInputElement>('new-120-period').value = ''; byId<HTMLTextAreaElement>('new-120-targets').value = ''; byId('task-rows-120').innerHTML = ''; taskRows120Counter = 0;
   const pending = state.pendingPushes120 || [];
   const notice = byId('pushed-120-notice');
-  if (pending.length > 0) { notice.style.display = 'block'; notice.innerHTML = `<strong>📋 ${pending.length} priorit${pending.length > 1 ? 'ies' : 'y'} will be carried over:</strong><ul style="margin-top:6px;padding-left:18px">${pending.map((p) => `<li>${p.what}</li>`).join('')}</ul>`; } else notice.style.display = 'none';
+  if (pending.length > 0) { notice.style.display = 'block'; notice.innerHTML = `<strong>📋 ${pending.length} priorit${pending.length > 1 ? 'ies' : 'y'} will be carried over:</strong><ul style="margin-top:6px;padding-left:18px">${pending.map((p) => `<li>${esc(p.what)}</li>`).join('')}</ul>`; } else notice.style.display = 'none';
   add120TaskRow(); add120TaskRow(); add120TaskRow();
   byId('modal-120-overlay').style.display = 'flex';
 }

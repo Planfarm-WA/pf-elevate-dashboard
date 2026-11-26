@@ -781,6 +781,114 @@ describe('drag and drop', () => {
   });
 });
 
+describe('user text', () => {
+  // Characters that mean something in HTML, for every place the templates put text: element text
+  // (<img …>), quoted attributes (" and '), textarea content (</textarea>) and a typed entity (&amp;).
+  const TEXT = `A & B <img src=x> "quoted" 'single' </textarea> &amp;`;
+  // "Who" is split into badges on / , and &, so it gets the same characters without those.
+  const WHO = `Sam "Q" <img src=x> 'Al'`;
+
+  /** No element was created from the text: index.html has no <img> of its own. */
+  function noMarkupFromText(): void {
+    expect(document.querySelector('img')).toBeNull();
+  }
+
+  it('shows text exactly as typed, never as HTML, and every dialog saves it back unchanged', async () => {
+    await startApp(fixture({
+      periods120: [{ id: 'p1', label: TEXT, period: TEXT, current: true, oneyear: [], priorities: [{ id: 'x1', what: TEXT, who: WHO, when: TEXT, status: 'none', pushed: false }] }],
+      rounds: [{ id: 'r1', label: TEXT, period: TEXT, current: true, notes: TEXT, tasks: [{ id: 't1', what: TEXT, who: WHO, when: TEXT, status: 'none', pushed: false }] }],
+      sessions: [{ id: 's1', date: TEXT, format: TEXT, focus: TEXT, notes: TEXT, done: false }],
+      blueprint: { tenyear: TEXT, threeyear: TEXT, values: [TEXT], oneyear: [{ text: TEXT, done: false }], purpose: TEXT, issues: [TEXT, `OPPORTUNITY: ${TEXT}`] },
+      pendingPushes: [{ what: TEXT, who: WHO, when: TEXT, fromRound: TEXT }],
+      pendingPushes120: [{ what: TEXT, who: WHO, when: TEXT, fromPeriod: TEXT }],
+    }));
+    noMarkupFromText();
+
+    // Shown as text everywhere.
+    expect($('#ppanel-p1 h2').textContent).toBe(`${TEXT} — ${TEXT}`);
+    expect($('#body-120-p1 tr').textContent).toContain(TEXT);
+    expect($$('#body-120-p1 .badge').map((b) => b.textContent)).toEqual([WHO]);
+    expect($('#panel-r1 h2').textContent).toBe(`${TEXT} — ${TEXT}`);
+    expect($('#tasks-r1 tr').textContent).toContain(TEXT);
+    expect(value('#notes-r1')).toBe(TEXT);
+    expect($$('#sessions-tbody td').slice(0, 4).map((td) => td.textContent)).toEqual([TEXT, TEXT, TEXT, TEXT]);
+    expect($('#bp-tenyear-body').textContent).toBe(TEXT);
+    expect($('#bp-threeyear-body').textContent?.trim()).toBe(TEXT);
+    expect($('#bp-purpose-body').textContent).toBe(TEXT);
+    expect($('#bp-values-body').textContent).toBe(TEXT);
+    expect($('#bp-oneyear-body').textContent).toContain(TEXT);
+    expect($$('#bp-issues-body li').map((li) => li.textContent)).toEqual([TEXT, `Opportunity: ${TEXT}`]);
+
+    // The queued pushes, listed in the New Period and New Round dialogs.
+    act('showNew120Modal');
+    expect($('#pushed-120-notice li').textContent).toBe(TEXT);
+    act('closeNew120Modal');
+    act('showNewRoundModal');
+    expect($('#pushed-tasks-notice li').textContent).toBe(TEXT);
+    act('closeModal');
+    noMarkupFromText();
+
+    // Each dialog shows the text in full, and saving it unchanged keeps it exactly.
+    act('editItem120', { periodId: 'p1', itemId: 'x1' });
+    expect([value('#ef-what'), value('#ef-who'), value('#ef-when')]).toEqual([TEXT, WHO, TEXT]);
+    noMarkupFromText();
+    act('saveEdit');
+    expect(priority(0, 'x1')).toMatchObject({ what: TEXT, who: WHO, when: TEXT });
+
+    act('editItem30', { roundId: 'r1', taskId: 't1' });
+    expect([value('#ef-what'), value('#ef-who'), value('#ef-when')]).toEqual([TEXT, WHO, TEXT]);
+    act('saveEdit');
+    expect(task(0, 't1')).toMatchObject({ what: TEXT, who: WHO, when: TEXT });
+
+    $('#ptab-p1').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    expect([value('#ef-what'), value('#ef-when')]).toEqual([TEXT, TEXT]);
+    act('saveEdit');
+    expect(saved().periods120[0]).toMatchObject({ label: TEXT, period: TEXT });
+
+    $('#tab-r1').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    expect([value('#ef-what'), value('#ef-when')]).toEqual([TEXT, TEXT]);
+    act('saveEdit');
+    expect(saved().rounds[0]).toMatchObject({ label: TEXT, period: TEXT });
+
+    act('editOneYearTarget', { idx: 0 });
+    expect(value('#ef-what')).toBe(TEXT);
+    act('saveEdit');
+    expect(saved().blueprint.oneyear).toEqual([{ text: TEXT, done: false }]);
+
+    const sections: Array<[section: string, shown: string]> = [
+      ['tenyear', TEXT], ['threeyear', TEXT], ['purpose', TEXT], ['values', TEXT], ['issues', `${TEXT}\nOPPORTUNITY: ${TEXT}`],
+    ];
+    for (const [section, shown] of sections) {
+      act('editBlueprint', { section });
+      expect(value('#bp-edit-val')).toBe(shown);
+      noMarkupFromText();
+      act('saveBpEdit');
+    }
+    expect(saved().blueprint).toMatchObject({ tenyear: TEXT, threeyear: TEXT, purpose: TEXT, values: [TEXT], issues: [TEXT, `OPPORTUNITY: ${TEXT}`] });
+
+    act('editSession', { sessionId: 's1' });
+    expect([value('#se-date'), value('#se-format'), value('#se-focus'), value('#se-notes')]).toEqual([TEXT, TEXT, TEXT, TEXT]);
+    noMarkupFromText();
+    act('saveSessionEdit');
+    expect(saved().sessions[0]).toMatchObject({ date: TEXT, format: TEXT, focus: TEXT, notes: TEXT });
+
+    expect(saved().rounds[0].notes).toBe(TEXT);
+    noMarkupFromText();
+  });
+
+  it('keeps working with ids that contain a quote (an imported file in local mode)', async () => {
+    const id = 'p"1';
+    await startApp(fixture({
+      periods120: [{ id, label: 'Period 1', period: 'Jan', current: true, priorities: [{ id: 'x"1', what: 'Fix fences', who: 'Sam', when: 'Feb', status: 'none', pushed: false }] }],
+    }));
+    expect(document.getElementById(`body-120-${id}`)?.textContent).toContain('Fix fences');
+    const edit = $('[data-click="editItem120"]');
+    expect([edit.dataset.periodId, edit.dataset.itemId]).toEqual([id, 'x"1']);
+    edit.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(value('#ef-what')).toBe('Fix fences');
+  });
+});
+
 describe('event delegation', () => {
   it('has an action for every data-click / data-input / data-change / data-submit in the markup, and no unused ones', async () => {
     const used = new Set<string>();
