@@ -32,7 +32,7 @@ src/
   html.ts           esc(): escapes text for the HTML template strings (see "How the page works")
   ui.ts             showToast(), playBing(), badgeFor()
   stats.ts          updateStats() (the hidden #stat-* divs)
-  drag.ts           initDragTable(), initDragList()
+  drag.ts           initDragTable(), initDragList(), isDragging(); a drop only counts when the drag started in the same table or list
   edit-modal.ts     the shared #edit-overlay: openEditModal(), saveEdit(), closeEditModal()
   navigation.ts     showSection() (nav tabs)
   io.ts             exportData(), importData()

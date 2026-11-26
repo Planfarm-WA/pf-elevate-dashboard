@@ -185,20 +185,19 @@ function isOpen(overlay: string): boolean {
   return $(overlay).classList.contains('open');
 }
 
-/** jsdom has no drag data, so dispatch the four drag events with a stand-in dataTransfer. */
+/** jsdom has no drag data, so drag events get a stand-in dataTransfer. */
+function dragEvent(el: Element, type: string): void {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'dataTransfer', { value: { effectAllowed: '', dropEffect: '' } });
+  el.dispatchEvent(event);
+}
+
+/** A whole drag, as the browser fires it: dragstart, dragover, drop, dragend. */
 function drag(source: Element, target: Element): void {
-  const dataTransfer = { effectAllowed: '', dropEffect: '' };
-  const steps: Array<[Element, string]> = [
-    [source, 'dragstart'],
-    [target, 'dragover'],
-    [target, 'drop'],
-    [source, 'dragend'],
-  ];
-  for (const [el, type] of steps) {
-    const event = new Event(type, { bubbles: true, cancelable: true });
-    Object.defineProperty(event, 'dataTransfer', { value: dataTransfer });
-    el.dispatchEvent(event);
-  }
+  dragEvent(source, 'dragstart');
+  dragEvent(target, 'dragover');
+  dragEvent(target, 'drop');
+  dragEvent(source, 'dragend');
 }
 
 function readBlob(blob: Blob): Promise<string> {
@@ -778,6 +777,66 @@ describe('drag and drop', () => {
       { text: 'C', done: false },
       { text: 'A', done: false },
     ]);
+  });
+
+  it("keeps each 1-year target's tick and edit buttons on that target after a drag", async () => {
+    await startApp(fixture({
+      blueprint: { ...fixture().blueprint, oneyear: [{ text: 'Buy a tractor', done: false }, { text: 'Fix the dam', done: false }] },
+    }));
+    const items = $$('#oneyear-list li');
+    drag(items[0], items[1]);
+    expect(saved().blueprint.oneyear).toEqual([{ text: 'Fix the dam', done: false }, { text: 'Buy a tractor', done: false }]);
+
+    // Use the buttons inside the dam's item: they must act on the dam, now first.
+    const dam = () => {
+      const li = $$('#oneyear-list li').find((el) => el.textContent?.includes('dam'));
+      if (!li) throw new Error('No item for the dam');
+      return li;
+    };
+    dam().querySelector('[data-click="editOneYearTarget"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(value('#ef-what')).toBe('Fix the dam');
+    saveEditDialog({ what: 'Fix the north dam' });
+    expect(saved().blueprint.oneyear[0]).toEqual({ text: 'Fix the north dam', done: false });
+
+    drag($$('#oneyear-list li')[0], $$('#oneyear-list li')[1]);
+    dam().querySelector('[data-click="toggleOneYearDone"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(saved().blueprint.oneyear).toEqual([{ text: 'Buy a tractor', done: false }, { text: 'Fix the north dam', done: true }]);
+  });
+
+  it('ignores a drop that did not start in the same list, such as a file or a priority row', async () => {
+    const targets = [{ text: 'A', done: false }, { text: 'B', done: false }, { text: 'C', done: false }];
+    await startApp(fixture({
+      periods120: [{ id: 'p1', label: 'Period 1', period: 'Jan', current: true, priorities: [{ id: 'x1', what: 'Fix fences', who: 'Sam', when: 'Feb', status: 'none', pushed: false }] }],
+      blueprint: { ...fixture().blueprint, oneyear: targets },
+    }));
+    drag($$('#oneyear-list li')[0], $$('#oneyear-list li')[2]);
+    const order = saved().blueprint.oneyear;
+
+    // A drop with no drag from the list, as when a file is dropped onto it.
+    dragEvent($$('#oneyear-list li')[0], 'drop');
+    expect(saved().blueprint.oneyear).toEqual(order);
+
+    // A priority row dropped onto a target: neither list changes.
+    const row = $('#body-120-p1 tr');
+    dragEvent(row, 'dragstart');
+    dragEvent($$('#oneyear-list li')[0], 'drop');
+    dragEvent(row, 'dragend');
+    expect(saved().blueprint.oneyear).toEqual(order);
+    expect($$('#oneyear-list li')).toHaveLength(3);
+    expect($('#body-120-p1').contains(row)).toBe(true);
+  });
+
+  it('knows when a drag is under way', async () => {
+    await startApp();
+    const id = createPeriod('Period 1', 'Jan', [['A'], ['B']]);
+    const { isDragging } = await import('../src/drag.ts');
+    const rows = $$(`#body-120-${id} tr`);
+    expect(isDragging()).toBe(false);
+    dragEvent(rows[0], 'dragstart');
+    expect(isDragging()).toBe(true);
+    dragEvent(rows[1], 'drop');
+    dragEvent(rows[0], 'dragend');
+    expect(isDragging()).toBe(false);
   });
 });
 

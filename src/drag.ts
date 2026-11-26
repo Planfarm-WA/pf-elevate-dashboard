@@ -3,8 +3,13 @@
 import { state } from './state.ts';
 import { save } from './persistence.ts';
 
-/** The row or list item being dragged. */
+/** The row or list item being dragged; null when no drag is under way (cleared on dragend). */
 let dragSrc: HTMLElement | null = null;
+
+/** True while a row or list item is being dragged. */
+export function isDragging(): boolean {
+  return dragSrc !== null;
+}
 
 /**
  * Make the rows of a priorities/tasks table draggable. Dropping a row moves it, reorders the
@@ -20,6 +25,7 @@ export function initDragTable(tbodyId: string, type: 'priorities120' | 'tasks30'
       if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
     });
     row.addEventListener('dragend', () => {
+      dragSrc = null;
       row.classList.remove('dragging');
       tbody.querySelectorAll('tr').forEach((r) => r.classList.remove('drag-over'));
     });
@@ -33,7 +39,8 @@ export function initDragTable(tbodyId: string, type: 'priorities120' | 'tasks30'
       e.preventDefault();
       if (row === dragSrc) return;
       row.classList.remove('drag-over');
-      if (!dragSrc) return;
+      // Only rows of this table: not something dragged in from elsewhere (a file, another list).
+      if (!dragSrc || !tbody.contains(dragSrc)) return;
       const rows: Element[] = Array.from(tbody.querySelectorAll('tr'));
       const dragIdx = rows.indexOf(dragSrc);
       const dropIdx = rows.indexOf(row);
@@ -59,7 +66,8 @@ export function initDragTable(tbodyId: string, type: 'priorities120' | 'tasks30'
 
 /**
  * Make the items of a list draggable. For the 1-year targets, dropping reorders
- * state.blueprint.oneyear to the new order (by `data-idx`), renumbers the items and saves.
+ * state.blueprint.oneyear to the new order (by `data-idx`), renumbers the items and their
+ * buttons, and saves.
  */
 export function initDragList(listId: string, type: 'oneyear'): void {
   const list = document.getElementById(listId);
@@ -71,6 +79,7 @@ export function initDragList(listId: string, type: 'oneyear'): void {
       if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
     });
     item.addEventListener('dragend', () => {
+      dragSrc = null;
       item.classList.remove('dragging');
       list.querySelectorAll('li').forEach((i) => i.classList.remove('drag-over'));
     });
@@ -83,7 +92,8 @@ export function initDragList(listId: string, type: 'oneyear'): void {
       e.preventDefault();
       if (item === dragSrc) return;
       item.classList.remove('drag-over');
-      if (!dragSrc) return;
+      // Only items of this list: not something dragged in from elsewhere (a file, another list).
+      if (!dragSrc || !list.contains(dragSrc)) return;
       const items: Element[] = Array.from(list.querySelectorAll('li'));
       const dragIdx = items.indexOf(dragSrc);
       const dropIdx = items.indexOf(item);
@@ -93,7 +103,11 @@ export function initDragList(listId: string, type: 'oneyear'): void {
         const newOrder = Array.from(list.querySelectorAll('li')).map((i) => parseInt(i.getAttribute('data-idx') ?? ''));
         const reordered = newOrder.map((idx) => state.blueprint.oneyear[idx]);
         state.blueprint.oneyear = reordered;
-        list.querySelectorAll('li').forEach((li, i) => li.setAttribute('data-idx', String(i)));
+        // The item's tick, edit and delete buttons carry its index too: renumber them with it, or
+        // they act on whichever target now sits at their old index.
+        list.querySelectorAll('li').forEach((li, i) => {
+          for (const el of [li, ...li.querySelectorAll('[data-idx]')]) el.setAttribute('data-idx', String(i));
+        });
         save();
       }
     });
