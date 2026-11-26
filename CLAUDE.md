@@ -268,3 +268,4 @@ psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=
    Then merge. After the merge, the old site's browser data is no longer used.
 
    **Don't redeploy `main` before the merge.** The Vercel project now builds with Vite, and `main` has only the old `index.html`, so the build would fail.
+4. **Change the `security definer` to `security invoker`.** Functions created in migration inherently owned by `postgres` which bypass the RLS.
