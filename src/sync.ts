@@ -95,6 +95,8 @@ export interface Syncer {
   changed(): void;
   /** True while changes haven't reached the database yet (waiting, writing, or failed). */
   pending(): boolean;
+  /** True when `rows` hold exactly what was last saved (or loaded): nothing to write. */
+  matchesSaved(rows: Snapshot): boolean;
   /**
    * Stop for good: no more writes, retries or status updates, and unsaved changes are dropped. A
    * write already under way still reaches the database, but its result is ignored. Without this,
@@ -164,6 +166,7 @@ export function createSyncer(options: SyncerOptions): Syncer {
       schedule(debounceMs);
     },
     pending: () => !stopped && (timer !== null || running || failed),
+    matchesSaved: (rows) => saved !== null && diff(saved, rows).length === 0,
     stop() {
       stopped = true;
       if (timer) clearTimeout(timer);

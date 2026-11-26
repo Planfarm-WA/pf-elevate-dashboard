@@ -40,7 +40,10 @@ export function createFakeBackend(options: FakeOptions) {
     rows: structuredClone(b.rows ?? stateToRows(emptyState())),
   }]));
   const applied: Op[][] = [];
+  const loaded: string[] = [];
   let failures = 0;
+  let loadFailures = 0;
+  let heldLoad: Promise<void> | null = null;
 
   const canSee = (id: string) => {
     const b = businesses.get(id);
@@ -79,7 +82,16 @@ export function createFakeBackend(options: FakeOptions) {
       return [...businesses.entries()].filter(([id]) => canSee(id)).map(([id, b]) => ({ id, name: b.name }))
         .sort((a, b) => a.name.localeCompare(b.name));
     },
-    async loadBusiness(id) { return load(id); },
+    async loadBusiness(id) {
+      loaded.push(id);
+      if (loadFailures > 0) { loadFailures--; throw new Error('simulated network error'); }
+      // Read now, as the server would at request time, but answer once a held load is released.
+      const data = canSee(id) ? load(id) : null;
+      const hold = heldLoad;
+      heldLoad = null;
+      if (hold) await hold;
+      return data;
+    },
     async apply(id, ops) {
       if (failures > 0) { failures--; throw new Error('simulated network error'); }
       const rows = rowsOf(id);
@@ -124,5 +136,27 @@ export function createFakeBackend(options: FakeOptions) {
     applied,
     /** Make the next `count` apply() calls fail. */
     failNext: (count = 1) => { failures = count; },
+    /** Every loadBusiness() call, in order (the business ids). */
+    loaded,
+    /** Change a business's stored rows, as another device would. */
+    remoteChange: (id: string, change: (rows: Snapshot) => void) => {
+      const b = businesses.get(id);
+      if (b) change(b.rows);
+    },
+    /** Rename a business, as staff on another device would. */
+    rename: (id: string, name: string) => {
+      const b = businesses.get(id);
+      if (b) b.name = name;
+    },
+    /** Delete a business (its rows and client links go with it). */
+    removeBusiness: (id: string) => { businesses.delete(id); },
+    /** Make the next `count` loadBusiness() calls fail, as when offline. */
+    failNextLoad: (count = 1) => { loadFailures = count; },
+    /** Hold the next loadBusiness() answer (read at request time) until the returned function runs. */
+    holdNextLoad: (): (() => void) => {
+      let release = () => {};
+      heldLoad = new Promise<void>((resolve) => { release = resolve; });
+      return () => release();
+    },
   };
 }

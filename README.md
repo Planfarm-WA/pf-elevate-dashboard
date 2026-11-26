@@ -24,7 +24,7 @@ Priorities and tasks have a status (On Track / Off Track / Complete), an owner a
 - **Saved 14:32** once it's in the database.
 - **Not saved — retrying** if the connection dropped. Keep the page open and it tries again by itself. Closing the tab, **Switch business** or **Sign out** while something isn't saved yet asks first. If you leave anyway, that change is lost.
 
-If two people edit the *same* item at the same moment, the last change wins. Changes made on another device show up when you reload the page.
+Changes made on another device show up as soon as you come back to the tab, or within a minute. The page waits while you're in a dialog, typing in a box, dragging, or while a change of yours is still saving. If the business you have open is deleted, or your access to it is removed, you're taken back to the list. If two people edit the *same* item at the same moment, the last change wins.
 
 **Backing up and moving data.**
 - **Export Data** downloads a `planfarm-elevate-dashboard-YYYY-MM-DD.json` file of the open business. Keep it as a backup.
@@ -169,7 +169,7 @@ The site is deployed on Vercel from the `main` branch. Every other pushed branch
 
 - Sign-up links per business, plus email sending (SMTP) and "forgot password".
 - An admin screen for staff to create businesses and manage client logins.
-- Possibly live updates, so a change on one device shows up on another without reloading.
+- Possibly instant updates (Supabase Realtime), so another device's change shows up within a second rather than a minute.
 
 ## Repository layout
 

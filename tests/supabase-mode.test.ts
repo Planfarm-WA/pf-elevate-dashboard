@@ -2,12 +2,13 @@
 // Supabase mode with an in-memory backend: logging in, choosing and opening a business, saving
 // edits (and retrying), importing, switching and signing out.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { stopLiveUpdates } from '../src/live-updates.ts';
 import { stateToRows } from '../src/rows.ts';
 import { emptyState } from '../src/state.ts';
 import { createFakeBackend, type FakeOptions } from './fake-backend.ts';
 import { $, $$, act, pageBody, setValue } from './helpers.ts';
 
-/** A small farm: a purpose, and one current period with one priority for Sam. */
+/** A small farm: a purpose, one current period with one priority for Sam, and an empty round. */
 function farm(prefix: string) {
   const s = emptyState();
   s.blueprint.purpose = `${prefix} purpose`;
@@ -15,6 +16,7 @@ function farm(prefix: string) {
     id: `${prefix}-p1`, label: 'Period 1', period: 'Jan', current: true, oneyear: [],
     priorities: [{ id: `${prefix}-x1`, what: 'Fix fences', who: 'Sam / Alex', when: 'Feb', status: 'none', pushed: false }],
   });
+  s.rounds.push({ id: `${prefix}-r1`, label: 'Round 1', period: 'Feb', current: true, notes: '', tasks: [] });
   return stateToRows(s);
 }
 
@@ -27,27 +29,39 @@ const STAFF: Pick<FakeOptions, 'users' | 'staff' | 'businesses'> = {
   ],
 };
 
-async function start(options: FakeOptions, retryMs = [20]) {
+/** Start in Supabase mode. `refreshMs` is the live updates' interval (default: a minute). */
+async function start(options: FakeOptions, retryMs = [20], refreshMs?: number) {
   const fake = createFakeBackend(options);
   const { startApp } = await import('../src/app.ts');
-  await startApp({ kind: 'supabase', backend: fake.backend, timing: { debounceMs: 0, retryMs } });
+  await startApp({ kind: 'supabase', backend: fake.backend, timing: { debounceMs: 0, retryMs, refreshMs } });
   return fake;
 }
 
 const visible = (selector: string) => !$(selector).hidden;
 const saveStatus = () => $('#last-updated-display').textContent ?? '';
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+/** Let pending promises run (a reload's answer is applied a few microtasks after the request). */
+const settle = () => sleep(0);
+
+function setVisibility(visibility: DocumentVisibilityState): void {
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => visibility });
+}
+/** Switching back to the tab, as the browser reports it. */
+const returnToTab = () => document.dispatchEvent(new Event('visibilitychange'));
 
 beforeEach(() => {
   vi.resetModules();
   localStorage.clear();
   history.replaceState(null, '', '/');
   document.body.innerHTML = pageBody();
+  setVisibility('visible');
   vi.stubGlobal('confirm', vi.fn(() => true));
   vi.stubGlobal('alert', vi.fn());
 });
 
 afterEach(() => {
+  stopLiveUpdates();
+  Reflect.deleteProperty(document, 'visibilityState');
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -239,6 +253,233 @@ describe('leaving', () => {
     await vi.waitFor(() => expect(fake.rows('b2').priorities['b-x1'].status).toBe('on-track'));
     expect(Object.keys(fake.rows('b2').periods)).toEqual(['b-p1']);
     expect(fake.rows('b2').blueprint.purpose).toBe('b purpose');
+  });
+});
+
+describe('live updates', () => {
+  const CLIENT = { ...STAFF, signedIn: 'client@test.local' };
+  const purpose = () => $('#bp-purpose-body').textContent;
+  const changePurposeElsewhere = (fake: ReturnType<typeof createFakeBackend>, id = 'b1') =>
+    fake.remoteChange(id, (rows) => { rows.blueprint.purpose = 'Changed elsewhere'; });
+  const onTrack = () => $('[data-click="setStatus120"][data-item-id="a-x1"][data-status="on-track"]').classList.contains('active-on-track');
+
+  it('shows a change made on another device when you come back to the tab, or when the network returns', async () => {
+    const fake = await start(CLIENT);
+    changePurposeElsewhere(fake);
+    returnToTab();
+    await vi.waitFor(() => expect(purpose()).toBe('Changed elsewhere'));
+
+    fake.remoteChange('b1', (rows) => { rows.priorities['a-x1'].status = 'complete'; });
+    window.dispatchEvent(new Event('online'));
+    await vi.waitFor(() => expect($('#body-120-a-p1 tr').className).toBe('status-complete'));
+    expect(fake.applied).toEqual([]);
+  });
+
+  it('reloads every so often while the tab is visible, but not while it is hidden', async () => {
+    const fake = await start(CLIENT, [20], 30);
+    await vi.waitFor(() => expect(fake.loaded.length).toBeGreaterThan(2));
+
+    setVisibility('hidden');
+    await sleep(40);
+    const whileHidden = fake.loaded.length;
+    await sleep(150);
+    expect(fake.loaded).toHaveLength(whileHidden);
+
+    setVisibility('visible');
+    returnToTab();
+    await vi.waitFor(() => expect(fake.loaded.length).toBeGreaterThan(whileHidden));
+  });
+
+  it("doesn't redraw for your own save coming back, only for a change made elsewhere", async () => {
+    const fake = await start(CLIENT);
+    act('setStatus120', { periodId: 'a-p1', itemId: 'a-x1', status: 'on-track' });
+    await vi.waitFor(() => expect(saveStatus()).toMatch(/Saved\d{1,2}:\d{2}/));
+    const probe = $('#bp-purpose-body p');
+
+    returnToTab();
+    await vi.waitFor(() => expect(fake.loaded).toHaveLength(2));
+    await settle();
+    expect(probe.isConnected).toBe(true);
+    expect(saveStatus()).toMatch(/Saved\d{1,2}:\d{2}/);
+
+    changePurposeElsewhere(fake);
+    returnToTab();
+    await vi.waitFor(() => expect(probe.isConnected).toBe(false));
+    expect(purpose()).toBe('Changed elsewhere');
+    expect(onTrack()).toBe(true);
+  });
+
+  it('waits while a change of yours is unsaved, then shows both', async () => {
+    const fake = await start(CLIENT, [300]);
+    fake.failNext();
+    act('setStatus120', { periodId: 'a-p1', itemId: 'a-x1', status: 'complete' });
+    await vi.waitFor(() => expect(saveStatus()).toContain('Not saved'));
+    changePurposeElsewhere(fake);
+
+    returnToTab();
+    await settle();
+    expect(fake.loaded).toHaveLength(1);
+    expect(purpose()).toBe('a purpose');
+
+    await vi.waitFor(() => expect(saveStatus()).toMatch(/Saved\d/));
+    returnToTab();
+    await vi.waitFor(() => expect(purpose()).toBe('Changed elsewhere'));
+    expect($('#body-120-a-p1 tr').className).toBe('status-complete');
+    expect(fake.rows('b1').priorities['a-x1'].status).toBe('complete');
+  });
+
+  it('keeps an edit you saved while a reload was on its way', async () => {
+    const fake = await start(CLIENT);
+    changePurposeElsewhere(fake);
+    const release = fake.holdNextLoad();
+    returnToTab();
+    await vi.waitFor(() => expect(fake.loaded).toHaveLength(2));
+
+    // The held answer was read before this edit, so applying it would undo the edit.
+    act('setStatus120', { periodId: 'a-p1', itemId: 'a-x1', status: 'on-track' });
+    await vi.waitFor(() => expect(fake.rows('b1').priorities['a-x1'].status).toBe('on-track'));
+    await vi.waitFor(() => expect(saveStatus()).toMatch(/Saved\d/));
+    release();
+    await settle();
+    expect(onTrack()).toBe(true);
+    expect(purpose()).toBe('a purpose');
+
+    returnToTab();
+    await vi.waitFor(() => expect(purpose()).toBe('Changed elsewhere'));
+    expect(onTrack()).toBe(true);
+  });
+
+  it("waits while you're in a dialog, typing in a box, or dragging", async () => {
+    const fake = await start(CLIENT);
+    changePurposeElsewhere(fake);
+    const row = () => $('#body-120-a-p1 tr');
+    const busy: Array<[what: string, begin: () => void, end: () => void]> = [
+      ['edit dialog', () => act('editItem120', { periodId: 'a-p1', itemId: 'a-x1' }), () => act('closeEditModal')],
+      ['blueprint dialog', () => act('editBlueprint', { section: 'purpose' }), () => act('closeBpEditModal')],
+      ['session dialog', () => act('showAddSessionModal'), () => act('closeSessionEditModal')],
+      ['New Period dialog', () => act('showNew120Modal'), () => act('closeNew120Modal')],
+      ['New Round dialog', () => act('showNewRoundModal'), () => act('closeModal')],
+      ['notes box', () => $('#notes-a-r1').focus(), () => $('#notes-a-r1').blur()],
+      ['drag', () => row().dispatchEvent(new Event('dragstart')), () => row().dispatchEvent(new Event('dragend'))],
+    ];
+    for (const [what, begin, end] of busy) {
+      begin();
+      returnToTab();
+      await settle();
+      expect(fake.loaded, what).toHaveLength(1);
+      expect(purpose(), what).toBe('a purpose');
+      end();
+    }
+    returnToTab();
+    await vi.waitFor(() => expect(purpose()).toBe('Changed elsewhere'));
+  });
+
+  it('never loads one business into the next one you open', async () => {
+    history.replaceState(null, '', '/?business=b1');
+    const fake = await start({ ...STAFF, signedIn: 'staff@test.local' });
+    changePurposeElsewhere(fake, 'b1');
+    const release = fake.holdNextLoad();
+    returnToTab();
+    await vi.waitFor(() => expect(fake.loaded).toHaveLength(2));
+
+    act('switchBusiness');
+    await vi.waitFor(() => expect(visible('#business-picker')).toBe(true));
+    act('openBusiness', { businessId: 'b2' });
+    await vi.waitFor(() => expect($('.header-client h1').textContent).toBe('Beta Farm'));
+    release();
+    await settle();
+    expect(purpose()).toBe('b purpose');
+
+    act('setStatus120', { periodId: 'b-p1', itemId: 'b-x1', status: 'on-track' });
+    await vi.waitFor(() => expect(fake.rows('b2').priorities['b-x1'].status).toBe('on-track'));
+    expect(Object.keys(fake.rows('b2').periods)).toEqual(['b-p1']);
+    expect(fake.rows('b2').blueprint.purpose).toBe('b purpose');
+  });
+
+  it('keeps the period and round you picked across a redraw, and falls back when they are deleted elsewhere', async () => {
+    const s = emptyState();
+    s.periods120.push(
+      { id: 'p1', label: 'Period 1', period: 'Jan', current: false, oneyear: [], priorities: [] },
+      { id: 'p2', label: 'Period 2', period: 'May', current: true, oneyear: [], priorities: [] },
+    );
+    s.rounds.push(
+      { id: 'r1', label: 'Round 1', period: 'Jan', current: false, notes: '', tasks: [] },
+      { id: 'r2', label: 'Round 2', period: 'Feb', current: true, notes: '', tasks: [] },
+    );
+    const fake = await start({ users: { 'c@test.local': 'pw' }, businesses: [{ id: 'b1', name: 'Alpha Farm', clients: ['c@test.local'], rows: stateToRows(s) }], signedIn: 'c@test.local' });
+    const active = (id: string) => $(id).classList.contains('active');
+
+    $('#ptab-p1').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    $('#tab-r1').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect([active('#ppanel-p1'), active('#panel-r1')]).toEqual([true, true]);
+
+    changePurposeElsewhere(fake);
+    returnToTab();
+    await vi.waitFor(() => expect(purpose()).toBe('Changed elsewhere'));
+    expect([active('#ppanel-p1'), active('#ppanel-p2'), active('#panel-r1'), active('#panel-r2')]).toEqual([true, false, true, false]);
+
+    fake.remoteChange('b1', (rows) => { delete rows.periods.p1; delete rows.rounds.r1; });
+    returnToTab();
+    await vi.waitFor(() => expect(document.getElementById('ppanel-p1')).toBeNull());
+    expect([active('#ppanel-p2'), active('#panel-r2')]).toEqual([true, true]);
+  });
+
+  it('stops after Switch business and after Sign out', async () => {
+    history.replaceState(null, '', '/?business=b1');
+    const fake = await start({ ...STAFF, signedIn: 'staff@test.local' }, [20], 30);
+    await vi.waitFor(() => expect(fake.loaded.length).toBeGreaterThan(1));
+
+    act('switchBusiness');
+    await vi.waitFor(() => expect(visible('#business-picker')).toBe(true));
+    await sleep(40);
+    const afterSwitch = fake.loaded.length;
+    returnToTab();
+    window.dispatchEvent(new Event('online'));
+    await sleep(150);
+    expect(fake.loaded).toHaveLength(afterSwitch);
+
+    act('openBusiness', { businessId: 'b1' });
+    await vi.waitFor(() => expect(visible('#dashboard')).toBe(true));
+    act('signOut');
+    await vi.waitFor(() => expect(visible('#login-screen')).toBe(true));
+    await sleep(40);
+    const afterSignOut = fake.loaded.length;
+    returnToTab();
+    await sleep(150);
+    expect(fake.loaded).toHaveLength(afterSignOut);
+  });
+
+  it('changes nothing when a reload fails, and tries again next time', async () => {
+    const fake = await start(CLIENT);
+    changePurposeElsewhere(fake);
+    fake.failNextLoad();
+    returnToTab();
+    await vi.waitFor(() => expect(fake.loaded).toHaveLength(2));
+    await settle();
+    expect(purpose()).toBe('a purpose');
+    expect(saveStatus()).toBe('SavedAll changes saved');
+
+    returnToTab();
+    await vi.waitFor(() => expect(purpose()).toBe('Changed elsewhere'));
+  });
+
+  it('goes back to the list when the open business is deleted elsewhere', async () => {
+    history.replaceState(null, '', '/?business=b1');
+    const fake = await start({ ...STAFF, signedIn: 'staff@test.local' });
+    fake.removeBusiness('b1');
+    returnToTab();
+    await vi.waitFor(() => expect(visible('#business-picker')).toBe(true));
+    expect($('#business-picker-message').textContent).toBe("Alpha Farm can't be opened any more: it was deleted, or your login no longer has access to it.");
+    expect($$('#business-list button').map((b) => b.textContent)).toEqual(['Beta Farm']);
+    expect(location.search).toBe('');
+  });
+
+  it('shows a new name given to the business elsewhere', async () => {
+    const fake = await start(CLIENT);
+    fake.rename('b1', 'Alpha Holdings');
+    returnToTab();
+    await vi.waitFor(() => expect($('.header-client h1').textContent).toBe('Alpha Holdings'));
+    expect(document.title).toBe('Alpha Holdings – Planfarm Elevate');
   });
 });
 

@@ -1,9 +1,11 @@
 // Supabase mode: logging in, choosing a business, opening it, switching and signing out. Also the
-// header's save status and the "Who" suggestions, which come from the open business's data.
+// header's save status, the "Who" suggestions, which come from the open business's data, and the
+// live updates' reloads of the open business.
 
 import { str, type Actions } from './actions.ts';
 import type { Backend, BusinessSummary } from './backend.ts';
 import { byId } from './dom.ts';
+import { startLiveUpdates, stopLiveUpdates, userIsBusy } from './live-updates.ts';
 import { usePersistence } from './persistence.ts';
 import { renderAll } from './render.ts';
 import { emptyState, state } from './state.ts';
@@ -20,7 +22,15 @@ export function showScreen(screen: Screen): void {
   byId('dashboard').hidden = screen !== 'dashboard';
 }
 
-type Timing = { debounceMs?: number; retryMs?: number[] };
+/** Waits in ms. The tests shorten them; the defaults are in sync.ts and live-updates.ts. */
+export type Timing = {
+  /** After the last change, before saving. */
+  debounceMs?: number;
+  /** Before each retry of a failed save. */
+  retryMs?: number[];
+  /** Between live-update reloads while the tab is visible. */
+  refreshMs?: number;
+};
 
 let backend: Backend | null = null;
 let timing: Timing = {};
@@ -84,12 +94,12 @@ async function logIn(event: Event): Promise<void> {
 
 /**
  * List the businesses this login can open. With `autoOpen`, open one straight away when the URL
- * names it (?business=…) or when there's only one.
+ * names it (?business=…) or when there's only one. `message` is shown above the list.
  */
-async function showBusinesses(email: string, autoOpen: boolean): Promise<void> {
+async function showBusinesses(email: string, autoOpen: boolean, message = ''): Promise<void> {
   signedInAs = email;
   byId('business-picker-user').textContent = `Signed in as ${email}`;
-  showMessage('business-picker-message', '');
+  showMessage('business-picker-message', message);
   try {
     businesses = await api().listBusinesses();
   } catch (err) {
@@ -123,7 +133,8 @@ async function showBusinesses(email: string, autoOpen: boolean): Promise<void> {
 }
 
 async function openBusiness(id: string): Promise<void> {
-  const persistence = createSupabasePersistence(api(), id, showSaveStatus, timing);
+  const { refreshMs, ...syncTiming } = timing;
+  const persistence = createSupabasePersistence(api(), id, showSaveStatus, syncTiming);
   try {
     await persistence.load();
   } catch (err) {
@@ -134,14 +145,42 @@ async function openBusiness(id: string): Promise<void> {
   closeOpenBusiness();
   open = persistence;
   usePersistence(persistence);
-  const name = persistence.businessName();
+  showOpenBusiness(persistence);
+  setUrlBusiness(id);
+  showScreen('dashboard');
+  startLiveUpdates(reloadOpenBusiness, refreshMs);
+}
+
+/** Draw the open business: its name in the header and the page title, then every tab. */
+function showOpenBusiness(p: SupabasePersistence): void {
+  const name = p.businessName();
   const heading = document.querySelector('.header-client h1');
   if (heading) heading.textContent = name;
   document.title = `${name} – Planfarm Elevate`;
   renderWhoSuggestions();
   renderAll();
-  setUrlBusiness(id);
-  showScreen('dashboard');
+}
+
+/**
+ * The live updates' reload (live-updates.ts calls it; a Realtime trigger would too). The
+ * persistence decides whether it's safe and takes on the changes; this redraws, or leaves a
+ * business that was deleted or unlinked.
+ */
+async function reloadOpenBusiness(): Promise<void> {
+  const p = open;
+  if (!p) return;
+  const result = await p.refresh(userIsBusy);
+  if (open !== p) return;
+  if (result === 'changed') showOpenBusiness(p);
+  else if (result === 'gone') await leaveGoneBusiness(p);
+}
+
+async function leaveGoneBusiness(p: SupabasePersistence): Promise<void> {
+  const name = p.businessName();
+  closeOpenBusiness();
+  Object.assign(state, emptyState());
+  setUrlBusiness(null);
+  await showBusinesses(signedInAs, false, `${name} can't be opened any more: it was deleted, or your login no longer has access to it.`);
 }
 
 /** Ask before leaving a business while changes are still on their way to the database. */
@@ -150,11 +189,12 @@ function okToLeave(): boolean {
 }
 
 /**
- * Stop saving the open business, then forget it. Its unsaved changes are dropped ("Leave
- * anyway?"); a save still waiting or retrying would otherwise later write `state` (by then another
- * business, or nothing) into it.
+ * Stop the open business's live updates and saving, then forget it. Its unsaved changes are
+ * dropped ("Leave anyway?"); a save still waiting or retrying would otherwise later write `state`
+ * (by then another business, or nothing) into it.
  */
 function closeOpenBusiness(): void {
+  stopLiveUpdates();
   open?.close();
   open = null;
 }

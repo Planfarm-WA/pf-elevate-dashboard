@@ -743,6 +743,28 @@ describe('navigation', () => {
     expect($('#blueprint').classList.contains('active')).toBe(false);
     expect($('.nav-tab.active').textContent).toContain('Coaching');
   });
+
+  it('keeps the period and round you clicked when a tab is redrawn, and opens a new one', async () => {
+    await startApp();
+    const p1 = createPeriod('Period 1', 'Jan');
+    createPeriod('Period 2', 'May');
+    const r1 = createRound('Round 1', 'Jan');
+    createRound('Round 2', 'Feb');
+    const active = (id: string) => $(id).classList.contains('active');
+
+    $(`#ptab-${p1}`).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    $(`#tab-${r1}`).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    // Clicking a round tab no longer clears the 120-day tab's choice.
+    expect([active(`#ppanel-${p1}`), active(`#panel-${r1}`)]).toEqual([true, true]);
+
+    // Opening a tab redraws it.
+    act('showSection', { section: 'priorities-120' });
+    act('showSection', { section: 'todos-30' });
+    expect([active(`#ppanel-${p1}`), active(`#panel-${r1}`)]).toEqual([true, true]);
+
+    const p3 = createPeriod('Period 3', 'Sep');
+    expect([active(`#ppanel-${p1}`), active(`#ppanel-${p3}`)]).toEqual([false, true]);
+  });
 });
 
 describe('drag and drop', () => {

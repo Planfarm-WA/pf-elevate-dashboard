@@ -1,6 +1,6 @@
 // The 120-Day Priorities tab: one tab per period, its Period Targets and priorities, statuses,
 // "Push →", the Edit Period dialog (double-click a tab) and the New Period dialog
-// (#modal-120-overlay). The last period is the active one.
+// (#modal-120-overlay). The active period is the one last clicked or created, otherwise the last.
 
 import { num, oneOf, str, type Actions } from '../actions.ts';
 import { byId } from '../dom.ts';
@@ -14,13 +14,17 @@ import { save } from '../persistence.ts';
 import { STATUSES, type Item, type Status } from '../types.ts';
 import { badgeFor, playBing, showToast } from '../ui.ts';
 
+/** The period whose tab was last clicked or that was last created, kept across redraws. */
+let selectedPeriodId: string | null = null;
+
 export function render120Periods(): void {
   const tabsEl = document.getElementById('period-tabs-120');
   const panelsEl = document.getElementById('period-panels-120');
   if (!tabsEl || !panelsEl) return;
   tabsEl.innerHTML = ''; panelsEl.innerHTML = '';
   if (!state.periods120.length) { panelsEl.innerHTML = `<div class="empty-state"><div class="icon">⚡</div><p>No periods yet.</p></div>`; updateStats(); return; }
-  const activePeriod = state.periods120[state.periods120.length - 1];
+  // The selected period, or the last one when none is selected or it's gone (e.g. another business).
+  const activePeriod = state.periods120.find((p) => p.id === selectedPeriodId) ?? state.periods120[state.periods120.length - 1];
   byId('period-rename-hint').style.display = 'block';
   state.periods120.forEach((period) => {
     const isActive = period.id === activePeriod.id;
@@ -85,6 +89,7 @@ export function renderPeriodPriorities(periodId: string): void {
 }
 
 function switch120Period(id: string): void {
+  selectedPeriodId = id;
   document.querySelectorAll('#period-tabs-120 .round-tab').forEach((t) => t.classList.remove('active'));
   document.querySelectorAll('#period-panels-120 .round-panel').forEach((p) => p.classList.remove('active'));
   document.getElementById(`ptab-${id}`)?.classList.add('active');
@@ -213,7 +218,9 @@ function createPeriod120(): void {
     if (what) priorities.push({ id: newId(), what, who: who || 'Team', when: when || 'TBC', status: 'none', pushed: false });
   });
   state.periods120.forEach((p) => p.current = false);
-  state.periods120.push({ id: newId(), label, period: period || label, current: true, oneyear, priorities });
+  const id = newId();
+  state.periods120.push({ id, label, period: period || label, current: true, oneyear, priorities });
+  selectedPeriodId = id;
   state.pendingPushes120 = [];
   save(); closeNew120Modal(); render120Periods(); showToast(`Period "${label}" created ✓`);
 }

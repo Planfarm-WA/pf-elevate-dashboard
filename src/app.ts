@@ -14,14 +14,15 @@ import { blueprintActions, closeBpEditModal } from './sections/blueprint.ts';
 import { closeNew120Modal, periods120Actions } from './sections/periods120.ts';
 import { closeModal, rounds30Actions } from './sections/rounds30.ts';
 import { closeSessionEditModal, sessionsActions } from './sections/sessions.ts';
-import { sessionActions, showScreen, startSupabaseSession } from './session.ts';
+import { stopLiveUpdates } from './live-updates.ts';
+import { sessionActions, showScreen, startSupabaseSession, type Timing } from './session.ts';
 import { localPersistence, updateLastUpdatedDisplay } from './storage.ts';
 
 export type AppMode =
   /** localStorage only: development without Supabase settings, and the tests. */
   | { kind: 'local' }
   /** Log in, choose a business, and save to Supabase. */
-  | { kind: 'supabase'; backend: Backend; timing?: { debounceMs?: number; retryMs?: number[] } }
+  | { kind: 'supabase'; backend: Backend; timing?: Timing }
   /**
    * No or invalid Supabase settings: show an error instead of quietly using localStorage.
    * `problem` is supabase-js's message when the settings were there but rejected.
@@ -37,6 +38,7 @@ export const actions = mergeActions(
 );
 
 export async function startApp(mode: AppMode): Promise<void> {
+  stopLiveUpdates(); // from an earlier start (the tests re-run startup)
   // Clicking the dark backdrop around a dialog (not the dialog itself) closes it.
   const backdrops: Array<[overlayId: string, close: () => void]> = [
     ['edit-overlay', closeEditModal],

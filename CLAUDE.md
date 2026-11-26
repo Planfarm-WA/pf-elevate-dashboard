@@ -14,12 +14,13 @@ src/
   main.ts           entry: startApp(appModeFromEnv()); exports `ready` (the tests await it) and `actions`
   config.ts         appModeFromEnv(): local / Supabase / missing-config, from VITE_SUPABASE_* (see "Modes")
   app.ts            startApp(mode): backdrop listeners, installActions(), then the mode's startup; the merged `actions`
-  session.ts        Supabase mode: login form, business list, open/switch/sign out, header save status, Who suggestions
+  session.ts        Supabase mode: login form, business list, open/switch/sign out, header save status, Who suggestions, reloadOpenBusiness()
+  live-updates.ts   Supabase mode: when to reload the open business (tab shown again, back online, every minute) and userIsBusy()
   render.ts         renderAll(): every tab from `state`
   persistence.ts    the Persistence interface (load / changed / importData), usePersistence(), and save()
   storage.ts        localPersistence: the whole state as JSON in localStorage key pf_elevate_blank1
-  supabase-persistence.ts  createSupabasePersistence(): load one business, sync changes (sync.ts), close() when it's left
-  sync.ts           diff(lastSaved, next) → ops, and createSyncer(): debounce, apply, retry, save status, stop()
+  supabase-persistence.ts  createSupabasePersistence(): load one business, sync changes (sync.ts), refresh() it, close() when it's left
+  sync.ts           diff(lastSaved, next) → ops, and createSyncer(): debounce, apply, retry, save status, matchesSaved(), stop()
   rows.ts           stateToRows() / rowsToState(): `state` ⇄ one business's rows (Snapshot)
   backend.ts        Backend interface + supabaseBackend(db): auth, list/load businesses, apply ops, import
   supabase.ts       createDb(): the typed browser client (keeps the session in localStorage)
@@ -58,7 +59,7 @@ Commands:
 - `pnpm test`: Vitest.
   - `tests/adapters.test.ts`: the export → rows mapping, against `tests/fixtures/export-v3.json`.
   - `tests/rows.test.ts` and `tests/sync.test.ts`: the state ⇄ rows conversion, `diff()` and the syncer.
-  - `tests/supabase-mode.test.ts`: login, the business list, saving, retrying, import and sign-out, against the in-memory `tests/fake-backend.ts`.
+  - `tests/supabase-mode.test.ts`: login, the business list, saving, retrying, import, sign-out and live updates, against the in-memory `tests/fake-backend.ts` (which can also change a business "from another device", hold or fail a load).
   - `tests/dashboard.test.ts`: the smoke tests in local mode (shared page helpers in `tests/helpers.ts`).
 
   The page tests They run in jsdom, a browser imitation in Node.js. Each test loads the `index.html` body, runs `src/main.ts` the way the browser does, then drives the page like a user. `act()` finds an element by its `data-click`/`data-input`/`data-change`/`data-submit` attribute and dispatches a real DOM event, which goes through the same delegated listener as in the browser. The tests check the page and the JSON saved in `localStorage`. They don't render anything: layout, real drag-and-drop, the print dialog and sound still need a browser.
@@ -86,7 +87,7 @@ There's no `vite.config.js`, because the defaults fit. Opening `index.html` stra
 
 The "event delegation" tests fail if an attribute names an unregistered action, if an action is never used, or if an inline `on*="…"` attribute comes back.
 
-The period and round tabs (`tab.onclick`/`tab.ondblclick`), drag-and-drop and the dialog backdrops attach their listeners in JS, which is fine because nothing is global.
+The period and round tabs (`tab.onclick`/`tab.ondblclick`), drag-and-drop, the dialog backdrops and the live updates (`visibilitychange`, `online`) attach their listeners in JS, which is fine because nothing is global.
 
 **Modes** (`src/config.ts`, `src/app.ts`):
 
@@ -107,7 +108,14 @@ The period and round tabs (`tab.onclick`/`tab.ondblclick`), drag-and-drop and th
   - They then call `closeOpenBusiness()` (`session.ts`). The persistence's `close()` stops its syncer for good with `stop()`, and unsaved changes are dropped.
   - Without that, a retry would later compare `state` (by then another business, or nothing) with the old business's saved rows, and write the difference into the old business.
   - A closed persistence's `load()` leaves `state` alone, for example when an import finishes after the user left.
-- **What's out of scope.** Two people editing the same row: the last write wins. There are no live updates (Realtime).
+- **Live updates (reload when idle).** No Realtime: the open business is reloaded and redrawn so other devices' changes show up.
+  - **When:** `live-updates.ts` calls `reloadOpenBusiness()` (`session.ts`) when the tab is shown again, when the browser comes back online, and every minute while the tab is visible (`refreshMs` in the tests). That's the only reload path, so a Realtime trigger could call it later.
+  - **When not:** `refresh()` (`supabase-persistence.ts`) skips while anything is unsaved (`pending()`) or `userIsBusy()` (an edit dialog, the New Period/Round dialog, focus in a box on the dashboard, a drag). It checks again after the request.
+  - **Stale answers:** a `generation` counter rises on every edit, load, applied refresh and close, and an answer to an older request is dropped. Otherwise an edit saved while the request was out would be undone, or a business left meanwhile loaded into the next one.
+  - **No redraw for your own saves:** the answer goes through the same round trip as `load()` and is compared with the syncer's saved rows (`matchesSaved()`).
+  - **Gone:** if the business was deleted or the login unlinked, `loadBusiness()` returns null and the user goes back to the list with a message. A failed request changes nothing; the next trigger retries. `loadBusiness()` gives up after 20 s.
+  - **Known limit:** a write that can never succeed (e.g. editing a priority whose period another device deleted) keeps `pending()` true, which also pauses reloads until the page is reloaded.
+- **What's out of scope.** Two people editing the same row at once: the last write wins, with no merging.
 - **Ids.** Ids are UUID strings from `newId()`, the same in the app and the database. Older saves and export files with numeric ids are converted by `stringifyIds()`.
 
 `package.json` (pnpm) has one runtime dependency, `@supabase/supabase-js`, which is bundled into the page (about 280 kB, 72 kB gzipped). The rest is dev tooling: Vite, TypeScript, ESLint (with typescript-eslint), Vitest with jsdom, tsx (this Ubuntu Node build can't run `.ts` files itself), `@types/node`, and the Supabase CLI. Run the Supabase CLI as `pnpm supabase <command>`, not bare `supabase`. pnpm blocks dependencies' install scripts unless `pnpm-workspace.yaml` (`allowBuilds`) allows them. esbuild's is set to `false`, because tsx works without it. A new dependency with an install script makes `pnpm add` fail with `ERR_PNPM_IGNORED_BUILDS` until it's listed there.
@@ -129,7 +137,7 @@ The period and round tabs (`tab.onclick`/`tab.ondblclick`), drag-and-drop and th
   - Each opener calls `openEditModal(title, fieldsHtml, onSave)` (`src/edit-modal.ts`) and passes its own save logic.
   - `saveEdit()` reads `#ef-what` (always present) and `#ef-who`/`#ef-when` (`''` when absent). It does nothing while "what" is empty, otherwise runs `onSave` and closes the dialog. Any other field is read by the opener's own `onSave`, like Edit Period's `#ef-targets`.
   - Blueprint text sections use `#bp-edit-overlay` with `currentBpSection`, and sessions have their own modal.
-- **The latest period/round is the active one** (last array element). `current` is set when a period or round is created.
+- **The active period/round tab** is the one last clicked or created (`selectedPeriodId` in `periods120.ts`, `selectedRoundId` in `rounds30.ts`), otherwise the last one. That choice survives redraws (opening the tab, editing, live updates). `current` is set when a period or round is created.
 - **Status buttons toggle:** clicking the active status sets it back to `'none'`. Values are `none | on-track | off-track | complete`. Completing an item plays `playBing()`.
 - **Carry-over ("Push →"):** `pushTask` / `pushPriority120` set `pushed: true` and copy the item into the next round/period with `carriedFrom: <label>`. If there is no next one yet, the item is queued in `pendingPushes` / `pendingPushes120`, and `createRound` / `createPeriod120` empty that queue into the new round or period.
 - **Odd blueprint storage:**
@@ -210,6 +218,7 @@ Then run each migration in order, e.g. `psql -v ON_ERROR_STOP=1 -f supabase/migr
 - User text is escaped before it goes into HTML (`esc()`, see "How the page works").
 - The Session Notes card, which never saved anything, is gone. Notes go in a session's Notes field or a round's notes box. Its markup, code, style and test are kept in `archive/session-notes-card.md`, with how to bring it back.
 - Period Targets (`periods120[].oneyear`) show on each period's card and can be edited (see "How the page works").
+- Live updates: the open business reloads when idle, so other devices' changes show up within a minute (see "Saving in Supabase mode").
 
 **Still to do,** roughly in order. Production (`main`) still serves the old single-file site until the merge, the last item.
 
@@ -218,7 +227,7 @@ Then run each migration in order, e.g. `psql -v ON_ERROR_STOP=1 -f supabase/migr
    - a join page, and public sign-up turned back on;
    - email sending (SMTP, e.g. Resend or Postmark) set up in Supabase Auth, together with a "forgot password" flow.
 2. **An admin screen for staff:** create businesses and see or remove client links. Creating logins needs the service-role key, so it must happen server-side (an Edge Function), never in the browser.
-3. **Maybe live updates** (Supabase Realtime), so a change on one device shows up on another without reloading. Today the last write wins per row.
+3. **Maybe Supabase Realtime**, so changes from another device show up within a second instead of a minute. Subscribe to the business's tables and call `reloadOpenBusiness()`. This needs a migration adding the tables to the `supabase_realtime` publication. Delete events aren't filtered by business, and `priorities_120`/`tasks_30` have no `business_id` to filter on.
 4. **Merge `supabase-schema` into `main` (production).** Clients' current data is in their own browsers on the old site, so first:
    - give every client a login (README "Adding a client (staff)");
    - import each client's export file with `pnpm import-dashboard`.

@@ -166,6 +166,17 @@ describe('createSyncer', () => {
     expect(apply).not.toHaveBeenCalled();
   });
 
+  it('tells whether rows match what was last saved', async () => {
+    const apply = vi.fn(async () => {});
+    const { s, syncer } = setup(apply);
+    expect(syncer.matchesSaved(stateToRows(s))).toBe(true);
+    s.blueprint.purpose = 'Feed more';
+    expect(syncer.matchesSaved(stateToRows(s))).toBe(false);
+    syncer.changed();
+    await vi.advanceTimersByTimeAsync(400);
+    expect(syncer.matchesSaved(stateToRows(s))).toBe(true);
+  });
+
   it('stops for good: drops the retry and later changes, and reports nothing more', async () => {
     const apply = vi.fn(async (ops: Op[]) => { void ops; throw new Error('offline'); });
     const { s, syncer, statuses } = setup(apply);

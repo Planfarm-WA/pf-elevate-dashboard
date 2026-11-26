@@ -1,5 +1,6 @@
 // The 30-Day To-Do's tab: one tab per round, its tasks, statuses, "Push →", the round's coaching
-// notes, renaming, and the New Round dialog (#modal-overlay). The last round is the active one.
+// notes, renaming, and the New Round dialog (#modal-overlay). The active round is the one last
+// clicked or created, otherwise the last.
 
 import { num, oneOf, str, type Actions } from '../actions.ts';
 import { byId } from '../dom.ts';
@@ -13,12 +14,16 @@ import { save } from '../persistence.ts';
 import { STATUSES, type Item, type Status } from '../types.ts';
 import { badgeFor, playBing, showToast } from '../ui.ts';
 
+/** The round whose tab was last clicked or that was last created, kept across redraws. */
+let selectedRoundId: string | null = null;
+
 export function render30(): void {
   const tabsEl = byId('round-tabs');
   const panelsEl = byId('round-panels');
   tabsEl.innerHTML = ''; panelsEl.innerHTML = '';
   if (!state.rounds.length) { panelsEl.innerHTML = `<div class="empty-state"><div class="icon">📋</div><p>No rounds yet.</p></div>`; return; }
-  const activeRound = state.rounds[state.rounds.length - 1];
+  // The selected round, or the last one when none is selected or it's gone (e.g. another business).
+  const activeRound = state.rounds.find((r) => r.id === selectedRoundId) ?? state.rounds[state.rounds.length - 1];
   const hintEl = document.getElementById('round-rename-hint');
   if (hintEl) hintEl.style.display = 'block';
   state.rounds.forEach((round) => {
@@ -75,10 +80,11 @@ function setStatus30(roundId: string, taskId: string, status: Status): void {
   if (t) { const wasComplete = t.status !== 'complete'; t.status = t.status === status ? 'none' : status; if (status === 'complete' && wasComplete && t.status === 'complete') playBing(); save(); renderRoundTasks(roundId); }
 }
 
-/** Clicking a round tab. It clears every .round-tab and .round-panel, the 120-day ones included. */
+/** Clicking a round tab. */
 function switchRound(id: string): void {
-  document.querySelectorAll('.round-tab').forEach((t) => t.classList.remove('active'));
-  document.querySelectorAll('.round-panel').forEach((p) => p.classList.remove('active'));
+  selectedRoundId = id;
+  document.querySelectorAll('#round-tabs .round-tab').forEach((t) => t.classList.remove('active'));
+  document.querySelectorAll('#round-panels .round-panel').forEach((p) => p.classList.remove('active'));
   document.getElementById(`tab-${id}`)?.classList.add('active');
   document.getElementById(`panel-${id}`)?.classList.add('active');
 }
@@ -204,7 +210,9 @@ function createRound(): void {
     if (what) tasks.push({ id: newId(), what, who: who || 'Team', when: when || 'TBC', status: 'none', pushed: false });
   });
   state.rounds.forEach((r) => r.current = false);
-  state.rounds.push({ id: newId(), label, period: period || label, current: true, notes: '', tasks });
+  const id = newId();
+  state.rounds.push({ id, label, period: period || label, current: true, notes: '', tasks });
+  selectedRoundId = id;
   state.pendingPushes = [];
   save(); closeModal(); render30();
 }

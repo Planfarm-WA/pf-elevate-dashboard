@@ -21,7 +21,11 @@ export interface Backend {
   currentUser(): Promise<string | null>;
   /** The businesses this login can open (all of them for staff), by name. */
   listBusinesses(): Promise<BusinessSummary[]>;
-  loadBusiness(id: string): Promise<LoadedBusiness>;
+  /**
+   * The whole business, or null when it doesn't exist or this login can't open it (deleted, or no
+   * longer linked). Throws when the request itself fails, e.g. offline.
+   */
+  loadBusiness(id: string): Promise<LoadedBusiness | null>;
   /** Write the ops in order; throws on the first failure. */
   apply(businessId: string, ops: Op[]): Promise<void>;
   /** Replace a business's data with a checked export file (see importer.ts). */
@@ -96,9 +100,11 @@ export function supabaseBackend(db: Db): Backend {
     },
 
     async loadBusiness(id) {
-      const { data, error } = await loose.from('businesses').select(BUSINESS_QUERY).eq('id', id).maybeSingle();
+      // Give up after 20 s: a request that never answers would otherwise stall the live updates.
+      const { data, error } = await loose.from('businesses').select(BUSINESS_QUERY).eq('id', id)
+        .abortSignal(AbortSignal.timeout(20_000)).maybeSingle();
       fail('Loading the business', error);
-      if (!data) throw new Error('This business was not found, or your login cannot open it.');
+      if (!data) return null;
       const raw = data as RawBusiness;
       const blueprint = Array.isArray(raw.blueprints) ? (raw.blueprints[0] ?? null) : raw.blueprints;
       return {

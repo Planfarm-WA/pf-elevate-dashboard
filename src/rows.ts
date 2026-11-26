@@ -88,7 +88,12 @@ export interface LoadedBusiness {
   sessions: SessionRow[];
 }
 
-const bySortOrder = <T extends Sorted>(rows: T[]): T[] => [...rows].sort((a, b) => a.sort_order - b.sort_order);
+/**
+ * By sort_order, then by id. Two devices adding an item at the same time can give two rows the same
+ * sort_order, and the database returns those in no fixed order; the id keeps every load the same.
+ */
+const bySortOrder = <T extends Sorted & { id?: string }>(rows: T[]): T[] =>
+  [...rows].sort((a, b) => a.sort_order - b.sort_order || (a.id ?? '').localeCompare(b.id ?? ''));
 const byCreatedAt = <T extends Queued>(rows: T[]): T[] => [...rows].sort((a, b) => a.created_at.localeCompare(b.created_at));
 
 function toItem(row: ItemRow): Item {
