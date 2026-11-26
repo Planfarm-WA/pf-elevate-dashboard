@@ -76,6 +76,7 @@ pnpm dev       # then open http://localhost:5173
   pnpm dev
   ```
   The hosted project's values work too, but then you're editing real client data.
+- **`pnpm dev` also reads `VITE_SUPABASE_*` from `.env`.** If it holds the hosted project's values, `pnpm dev` works on real client data. Export the local values in the terminal to override them.
 
 `pnpm build` creates the `dist/` folder that Vercel serves. Opening `index.html` straight from disk doesn't work.
 
@@ -131,16 +132,25 @@ Dates such as "By When" are stored as text, because the dashboard accepts entrie
 
 ### Importing a client's export file
 
-A client's `planfarm-elevate-dashboard-YYYY-MM-DD.json` file can be loaded into their business in the database. First create the business, and add the client's login if they need one (see "Creating the tables" above). Then, from the repository folder:
+A client's `planfarm-elevate-dashboard-YYYY-MM-DD.json` file can be loaded into their business in the database. First create the business, and add the client's login if they need one (see "Creating the tables" above).
+
+The script reads its settings from a `.env` file in the repository folder. Git ignores that file,
+so the password never reaches the repository. Create it once:
 
 ```sh
-export VITE_SUPABASE_URL=https://<project-ref>.supabase.co
-export VITE_SUPABASE_PUBLISHABLE_KEY=<publishable key>   # Supabase: Project Settings → API Keys
-export PF_STAFF_EMAIL=you@example.com                    # your staff login
-read -s PF_STAFF_PASSWORD && export PF_STAFF_PASSWORD    # type your password; it isn't shown
+VITE_SUPABASE_URL=https://<project-ref>.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=<publishable key>   # Supabase: Project Settings → API Keys
+PF_STAFF_EMAIL=you@example.com                    # your staff login
+PF_STAFF_PASSWORD=<your password>
+```
 
+Then, from the repository folder:
+
+```sh
 pnpm import-dashboard "ABC Holdings" ~/Downloads/planfarm-elevate-dashboard-2026-05-01.json
 ```
+
+The script won't start without the file. Variables exported in the terminal override its values.
 
 - **Choosing the business.** Use its exact name, or its id if two businesses share a name.
 - **What the import does:**

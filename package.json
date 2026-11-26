@@ -11,7 +11,7 @@
     "typecheck": "tsc && tsc -p scripts",
     "test": "vitest run",
     "gen:types": "supabase gen types typescript > src/database.types.ts",
-    "import-dashboard": "tsx scripts/import-dashboard.ts"
+    "import-dashboard": "tsx --env-file=.env scripts/import-dashboard.ts"
   },
   "keywords": [],
   "author": "",
